@@ -429,6 +429,11 @@ function powerSuggestion(word) {
 }
 
 function suggestionsFor(word) {
+  // a lone x can be a multiplication sign
+  if (word === 'x') return [
+    { name: 'krát (křížek)', sym: '×', kind: 'znak', note: '' },
+    { name: 'krát (tečka)', sym: '·', kind: 'znak', note: '' }
+  ];
   const letters = /^\p{L}+$/u.test(word);
   const found = letters ? lookup(word) : [];
   const idx = indexSuggestion(word);
@@ -1087,7 +1092,7 @@ const TABS = {
   'Vzorce': () => Object.entries(FORMULAS).flatMap(([name, list]) => [label(name), formulaList(list)]),
   'Zkratky': () => {
     const rows = [
-      ['x^2', 'x²'], ['10^-11', '10⁻¹¹'], ['v_0', 'v₀'], ['F_max', 'Fₘₐₓ'], ['a*b', 'a·b'], ['s-1 + Tab', 's⁻¹'], ['m3 + Tab', 'm³'], ['->', '→'], ['=>', '⇒'],
+      ['x^2', 'x²'], ['10^-11', '10⁻¹¹'], ['v_0', 'v₀'], ['F_max', 'Fₘₐₓ'], ['a*b', 'a·b'], ['s-1 + Tab', 's⁻¹'], ['x + Tab', '×'], ['m3 + Tab', 'm³'], ['->', '→'], ['=>', '⇒'],
       ['<=  >=', '≤  ≥'], ['!=', '≠'], ['~=', '≈'], ['+-', '±'],
       ['alfa + Tab', 'α'], ['Delta + Tab', 'Δ'], ['síla + Tab', 'F nebo F⃗'], ['newton + Tab', 'N'], ['Wel + Tab', 'Wₑₗ'], ['absolutní hodnota + Tab', '|…|'], ['m·v/ + Tab', 'm·v/(…)'], ['1/ + výběr', '½ ⅓ ¼'], ['Fmax + Tab', 'Fₘₐₓ'],
       ['Alt + ↑ / ↓', 'horní / dolní index'], ['Alt + V', 'šipka nad písmenem'], ['Alt + B', 'tučně'], ['Esc', 'zruší režim']

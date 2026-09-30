@@ -17,6 +17,7 @@ Stačí otevřít `index.html` v prohlížeči, poznámky se ukládají do prohl
 | `absolutní hodnota` / `abs` + Tab | \|…\| s kurzorem uprostřed, Tab skočí za čáru |
 | `s/` + Tab, `3/` + výběr | s/(…), (…)/(…), ³⁄₄, ¾ |
 | `s-1`, `m·s-2`, `m3` + Tab | s⁻¹, m·s⁻², m³ |
+| `x` + Tab | × (šipkou ↓ i ·) |
 | Alt+↑ / Alt+↓ | režim horního / dolního indexu |
 | Alt+B | tučný vektor 𝐅 |
 
