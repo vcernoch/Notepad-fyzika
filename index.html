@@ -1030,13 +1030,13 @@ function formulaList(items) {
 
 const TABS = {
   'Řecká': () => [
-    label('Malá písmena'), grid(GREEK.slice(0, 25).map(([k, v]) => symButton(v, '\\' + k))),
-    label('Velká písmena'), grid(GREEK.slice(25).map(([k, v]) => symButton(v, '\\' + k)))
+    label('Malá písmena'), grid(GREEK.slice(0, 25).map(([, v]) => symButton(v))),
+    label('Velká písmena'), grid(GREEK.slice(25).map(([, v]) => symButton(v)))
   ],
   'Operátory': () => [
-    label('Operace a relace'), grid(OPS.slice(0, 16).map(([k, v]) => symButton(v, '\\' + k))),
-    label('Analýza'), grid(OPS.slice(16, 26).map(([k, v]) => symButton(v, '\\' + k))),
-    label('Šipky, úhly a ostatní'), grid(OPS.slice(26).map(([k, v]) => symButton(v, '\\' + k)))
+    label('Operace a relace'), grid(OPS.slice(0, 16).map(([, v]) => symButton(v))),
+    label('Analýza'), grid(OPS.slice(16, 26).map(([, v]) => symButton(v))),
+    label('Šipky, úhly a ostatní'), grid(OPS.slice(26).map(([, v]) => symButton(v)))
   ],
   'Indexy': () => {
     const hint = document.createElement('p'); hint.className = 'hint';
@@ -1057,12 +1057,12 @@ const TABS = {
   'Vektory': () => {
     const t = document.createElement('div'); t.className = 'tools';
     t.append(
-      tool('v⃗', 'Šipka nad písmenem', 'Alt + V, nebo \\vec a písmeno', () => applyCombining(COMB.vec)),
+      tool('v⃗', 'Šipka nad písmenem', 'přidá se k písmenu před kurzorem (Alt + V)', () => applyCombining(COMB.vec)),
       tool('𝐅', 'Tučný vektor', 'Alt + B na označený text', applyBold),
-      tool('x̂', 'Stříška (jednotkový vektor)', '\\hat a písmeno', () => applyCombining(COMB.hat)),
-      tool('x̄', 'Pruh (střední hodnota)', '\\bar a písmeno', () => applyCombining(COMB.bar)),
-      tool('ẋ', 'Tečka (časová derivace)', '\\dot a písmeno', () => applyCombining(COMB.dot)),
-      tool('ẍ', 'Dvě tečky (druhá derivace)', '\\ddot a písmeno', () => applyCombining(COMB.ddot))
+      tool('x̂', 'Stříška (jednotkový vektor)', 'přidá se k písmenu před kurzorem', () => applyCombining(COMB.hat)),
+      tool('x̄', 'Pruh (střední hodnota)', 'přidá se k písmenu před kurzorem', () => applyCombining(COMB.bar)),
+      tool('ẋ', 'Tečka (časová derivace)', 'přidá se k písmenu před kurzorem', () => applyCombining(COMB.dot)),
+      tool('ẍ', 'Dvě tečky (druhá derivace)', 'přidá se k písmenu před kurzorem', () => applyCombining(COMB.ddot))
     );
     return [
       label('Značky nad písmeno'), t,
@@ -1078,9 +1078,7 @@ const TABS = {
   'Vzorce': () => Object.entries(FORMULAS).flatMap(([name, list]) => [label(name), formulaList(list)]),
   'Zkratky': () => {
     const rows = [
-      ['x^2', 'x²'], ['10^-11', '10⁻¹¹'], ['v_0', 'v₀'], ['F_max', 'Fₘₐₓ'], ['\\alpha', 'α'], ['\\Delta', 'Δ'],
-      ['\\vec F', 'F⃗'], ['\\hat x', 'x̂'], ['\\dot x', 'ẋ'], ['\\sqrt', '√'], ['\\deg', '°'], ['\\inf', '∞'],
-      ['\\hbar', 'ħ'], ['\\micro', 'µ'], ['\\Ohm', 'Ω'], ['a*b', 'a·b'], ['->', '→'], ['=>', '⇒'],
+      ['x^2', 'x²'], ['10^-11', '10⁻¹¹'], ['v_0', 'v₀'], ['F_max', 'Fₘₐₓ'], ['a*b', 'a·b'], ['->', '→'], ['=>', '⇒'],
       ['<=  >=', '≤  ≥'], ['!=', '≠'], ['~=', '≈'], ['+-', '±'],
       ['alfa + Tab', 'α'], ['Delta + Tab', 'Δ'], ['síla + Tab', 'F nebo F⃗'], ['newton + Tab', 'N'], ['Wel + Tab', 'Wₑₗ'], ['absolutní hodnota + Tab', '|…|'], ['m·v/ + Tab', 'm·v/(…)'], ['1/ + výběr', '½ ⅓ ¼'], ['Fmax + Tab', 'Fₘₐₓ'],
       ['Alt + ↑ / ↓', 'horní / dolní index'], ['Alt + V', 'šipka nad písmenem'], ['Alt + B', 'tučně'], ['Esc', 'zruší režim']
@@ -1088,7 +1086,7 @@ const TABS = {
     const tbl = document.createElement('table'); tbl.className = 'keys';
     rows.forEach(([k, v]) => { const tr = tbl.insertRow(); tr.insertCell().textContent = k; tr.insertCell().textContent = v; });
     const p = document.createElement('p'); p.className = 'hint';
-    p.textContent = 'Stačí začít psát český název písmena, veličiny nebo jednotky a nabídnou se značky. Velké písmeno na začátku (Delta, Omega) nabídne velké řecké písmeno. Příkaz s lomítkem se zobrazí po mezeře nebo jiném znaku. Všechny názvy řeckých písmen fungují jako v LaTeXu (\\omega, \\Phi…). Text je obyčejný Unicode, takže jde zkopírovat do Wordu, e-mailu i chatu.';
+    p.textContent = 'Stačí začít psát český název písmena, veličiny nebo jednotky a nabídnou se značky. Velké písmeno na začátku (Delta, Omega) nabídne velké řecké písmeno. Text je obyčejný Unicode, takže jde zkopírovat do Wordu, e-mailu i chatu.';
     return [label('Při psaní'), tbl, p];
   }
 };
