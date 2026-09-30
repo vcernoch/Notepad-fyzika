@@ -357,6 +357,27 @@ QUANTITIES.forEach(([name, sym, unit, vec]) => {
 UNIT_NAMES.forEach(([name, sym, alt = []]) => DICT.push({ name, sym, kind: 'jednotka', note: '', keys: [name, ...alt].map(fold) }));
 OTHER_NAMES.forEach(([name, sym]) => DICT.push({ name, sym, kind: 'znak', note: '', keys: [fold(name)] }));
 
+/* "Wel" → Wₑₗ, "Fmax" → Fₘₐₓ, "v0" → v₀: first letter is the quantity, the rest becomes its lower index */
+const COMMON_INDEX = new Set(['max', 'min', 'el', 'ef', 'str', 'tot', 'k', 'p']);
+function indexSuggestion(word) {
+  const chars = Array.from(word);
+  const head = chars[0], rest = chars.slice(1);
+  if (rest.length < 1 || rest.length > 3 || !rest.every(c => SUB[c])) return null;
+  const hasDigit = rest.some(c => /\d/.test(c));
+  const upper = head !== head.toLowerCase();
+  // lowercase words need a digit or a typical index, so ordinary words (pro, jak) stay quiet
+  if (!upper && !hasDigit && !COMMON_INDEX.has(rest.join(''))) return null;
+  return { name: head + ' s indexem ' + rest.join(''), sym: head + rest.map(c => SUB[c]).join(''), kind: 'index', note: '', strong: upper || hasDigit };
+}
+
+function suggestionsFor(word) {
+  const letters = /^\p{L}+$/u.test(word);
+  const found = letters ? lookup(word) : [];
+  const idx = indexSuggestion(word);
+  if (!idx) return found;
+  return idx.strong ? [idx, ...found.slice(0, 6)] : [...found.slice(0, 6), idx];
+}
+
 function lookup(word) {
   const w = fold(word);
   if (w.length < 2) return [];
@@ -676,10 +697,10 @@ function refreshSuggest() {
   const s = ed.selectionStart;
   if (!suggestOn.checked || s !== ed.selectionEnd || mode || pendingComb || document.activeElement !== ed) return hideSuggest();
   const before = ed.value.slice(0, s);
-  const m = before.match(/\p{L}+$/u);
+  const m = before.match(/\p{L}[\p{L}\d]*$/u);
   const after = ed.value.slice(s, s + 1);
   if (!m || /\p{L}/u.test(after) || before.slice(-m[0].length - 1, -m[0].length) === '\\') return hideSuggest();
-  const items = lookup(m[0]);
+  const items = suggestionsFor(m[0]);
   if (!items.length) return hideSuggest();
   sug = { items, index: 0, start: s - m[0].length, end: s, moved: false };
   renderSuggest();
@@ -894,7 +915,7 @@ const TABS = {
       ['\\vec F', 'F⃗'], ['\\hat x', 'x̂'], ['\\dot x', 'ẋ'], ['\\sqrt', '√'], ['\\deg', '°'], ['\\inf', '∞'],
       ['\\hbar', 'ħ'], ['\\micro', 'µ'], ['\\Ohm', 'Ω'], ['a*b', 'a·b'], ['->', '→'], ['=>', '⇒'],
       ['<=  >=', '≤  ≥'], ['!=', '≠'], ['~=', '≈'], ['+-', '±'],
-      ['alfa + Tab', 'α'], ['Delta + Tab', 'Δ'], ['síla + Tab', 'F nebo F⃗'], ['newton + Tab', 'N'],
+      ['alfa + Tab', 'α'], ['Delta + Tab', 'Δ'], ['síla + Tab', 'F nebo F⃗'], ['newton + Tab', 'N'], ['Wel + Tab', 'Wₑₗ'], ['Fmax + Tab', 'Fₘₐₓ'],
       ['Alt + ↑ / ↓', 'horní / dolní index'], ['Alt + V', 'šipka nad písmenem'], ['Alt + B', 'tučně'], ['Esc', 'zruší režim']
     ];
     const tbl = document.createElement('table'); tbl.className = 'keys';

@@ -14,6 +14,7 @@ Stačí otevřít `index.html` v prohlížeči, poznámky se ukládají do prohl
 | `a*b` | a·b |
 | `->`, `<=`, `>=`, `!=`, `~=`, `+-` | →, ≤, ≥, ≠, ≈, ± |
 | `alfa`, `síla`, `newton` + Tab | α, F / F⃗, N (našeptávač) |
+| `Wel`, `Fmax`, `v0` + Tab | Wₑₗ, Fₘₐₓ, v₀ |
 | Alt+↑ / Alt+↓ | režim horního / dolního indexu |
 | Alt+B | tučný vektor 𝐅 |
 
