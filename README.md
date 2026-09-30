@@ -23,4 +23,4 @@ Stačí otevřít `index.html` v prohlížeči, poznámky se ukládají do prohl
 
 V pravém panelu jsou řecká písmena, operátory, indexy, vektory, jednotky, konstanty a hotové vzorce.
 
-Přepínač **Psaní / Obojí / Papír** nahoře ukáže text tak, jak by se psal na papír: zlomky `a/b` a `(a+b)/(c-d)` pod sebou se zlomkovou čarou, odmocniny `√(…)` s čarou nad výrazem.
+Přepínač **Psaní / Obojí / Papír** nahoře ukáže text tak, jak by se psal na papír: zlomky `a/b` a `(a+b)/(c-d)` pod sebou se zlomkovou čarou, odmocniny `√(…)` s čarou nad výrazem. Znaménko krát (× nebo ·) drží výraz pohromadě i s mezerami, takže `X / Y × 3` se vykreslí jako X nad Y × 3. Plus a minus zlomek ukončí (`X / Y + 3`).

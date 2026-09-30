@@ -152,6 +152,7 @@ button { cursor: pointer; }
 .rad-sign path { fill: none; stroke: currentColor; stroke-width: 1.5px; stroke-linejoin: round; }
 .rad-index { font-size: .6em; align-self: flex-start; margin-right: -.45em; margin-top: .1em; }
 .rad-body { border-top: 1.5px solid currentColor; padding: .05em .15em 0; display: inline-flex; align-items: center; }
+.op { margin: 0 .12em; }
 .ph { display: inline-block; width: .7em; height: .9em; border: 1px dashed var(--muted); border-radius: 2px; vertical-align: middle; }
 
 .status {
@@ -799,12 +800,13 @@ function numeratorStart(before) {
     }
     return -1;
   }
-  const m = before.match(/[^\s=(\[{,;:+\-−<>≤≥≈≠±]+$/u);
+  // a product binds across spaces: "m · v/" takes "m · v" as the numerator
+  const m = before.match(/[^\s=(\[{,;:+\-−<>≤≥≈≠±]+(?:\s*[·×⋅]\s*[^\s=(\[{,;:+\-−<>≤≥≈≠±]+)*$/u);
   return m ? before.length - m[0].length : before.length;
 }
 function fractionItems(s) {
   const slash = s - 1;
-  const before = ed.value.slice(0, slash);
+  const before = ed.value.slice(0, slash).replace(/[ \t]+$/, '');
   const ns = numeratorStart(before);
   if (ns < 0) return [];
   const num = before.slice(ns);
@@ -1174,7 +1176,7 @@ function renderTerm(term, bare) {
     if (p.atom !== undefined) {
       const next = term.parts[k + 1];
       const m = next && next.group !== undefined && p.atom.match(/[√∛∜]$/);
-      html += esc(m ? p.atom.slice(0, -1) : p.atom);
+      html += esc(m ? p.atom.slice(0, -1) : p.atom).replace(/[·×⋅]/g, '<span class="op">$&</span>');
       if (m) {
         const index = { '∛': '3', '∜': '4' }[m[0]];
         html += '<span class="rad">' + (index ? '<span class="rad-index">' + index + '</span>' : '') +
@@ -1191,7 +1193,8 @@ function renderTerm(term, bare) {
 }
 function renderSeq(str) {
   if (!str.trim()) return '<span class="ph"></span>';
-  const toks = tokenize(str);
+  // multiplication binds tighter than a space: "Y × 3" stays one term, e.g. in a denominator
+  const toks = tokenize(str.replace(/\s*([·×⋅])\s*/g, '$1'));
   const out = []; // rendered items: {html, term?}
   for (let i = 0; i < toks.length; i++) {
     const t = toks[i];
