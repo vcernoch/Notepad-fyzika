@@ -18,6 +18,7 @@ Stačí otevřít `index.html` v prohlížeči, poznámky se ukládají do prohl
 | `s/` + Tab, `3/` + výběr | s/(…), (…)/(…), ³⁄₄, ¾ |
 | `s-1`, `m·s-2`, `m3` + Tab | s⁻¹, m·s⁻², m³ |
 | `x` + Tab | × (šipkou ↓ i ·) |
+| `Fd`, `ad` + Tab | F_d, a_d (v náhledu Papír jako dolní index) |
 | Alt+↑ / Alt+↓ | režim horního / dolního indexu |
 | Alt+B | tučný vektor 𝐅 |
 
