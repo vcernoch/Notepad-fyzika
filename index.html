@@ -381,12 +381,25 @@ function indexSuggestion(word) {
   return { name: head + ' s indexem ' + rest.join(''), sym: head + rest.map(c => SUB[c]).join(''), kind: 'index', note: '', strong: upper || hasDigit };
 }
 
+/* "r2" → r², "t10" → t¹⁰: letter followed only by digits can also be a power */
+const POWER_NAMES = { '2': 'na druhou', '3': 'na třetí' };
+function powerSuggestion(word) {
+  const chars = Array.from(word);
+  const exp = chars.slice(1).join('');
+  if (!/^[1-9]\d{0,2}$/.test(exp) || exp === '1') return null;
+  return { name: chars[0] + ' ' + (POWER_NAMES[exp] || 'na ' + exp + '.'), sym: chars[0] + Array.from(exp).map(c => SUP[c]).join(''), kind: 'mocnina', note: '', exp };
+}
+
 function suggestionsFor(word) {
   const letters = /^\p{L}+$/u.test(word);
   const found = letters ? lookup(word) : [];
   const idx = indexSuggestion(word);
-  if (!idx) return found;
-  return idx.strong ? [idx, ...found.slice(0, 6)] : [...found.slice(0, 6), idx];
+  const pow = powerSuggestion(word);
+  const extra = [idx, pow].filter(Boolean);
+  // r2, a3 are more often squared/cubed than indexed
+  if (pow && /^[23]$/.test(pow.exp)) extra.reverse();
+  if (!extra.length) return found;
+  return idx && !idx.strong ? [...found.slice(0, 5), ...extra] : [...extra, ...found.slice(0, 5)];
 }
 
 function lookupPhrase(phrase) {
