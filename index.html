@@ -356,6 +356,17 @@ QUANTITIES.forEach(([name, sym, unit, vec]) => {
 });
 UNIT_NAMES.forEach(([name, sym, alt = []]) => DICT.push({ name, sym, kind: 'jednotka', note: '', keys: [name, ...alt].map(fold) }));
 OTHER_NAMES.forEach(([name, sym]) => DICT.push({ name, sym, kind: 'znak', note: '', keys: [fold(name)] }));
+/* Paired signs: the cursor lands between them; Tab or the closing sign steps out */
+const WRAPPERS = [
+  ['absolutní hodnota', '|', '|', ['abs']], ['velikost vektoru', '|', '|'], ['norma', '‖', '‖'],
+  ['střední hodnota', '⟨', '⟩'], ['odmocnina z', '√(', ')'], ['třetí odmocnina z', '∛(', ')'],
+  ['jednotka veličiny', '[', ']'], ['zaokrouhlení dolů', '⌊', '⌋'], ['zaokrouhlení nahoru', '⌈', '⌉']
+];
+const CLOSERS = new Set(WRAPPERS.map(w => w[2]));
+const WRAP_OPEN = Object.fromEntries(WRAPPERS.map(w => [w[2], w[1].slice(-1)]));
+WRAPPERS.forEach(([name, open, close, alt = []]) => DICT.push({
+  name, sym: open + '…' + close, wrap: [open, close], kind: 'dvojice', note: '', keys: [name, ...alt].map(fold)
+}));
 
 /* "Wel" → Wₑₗ, "Fmax" → Fₘₐₓ, "v0" → v₀: first letter is the quantity, the rest becomes its lower index */
 const COMMON_INDEX = new Set(['max', 'min', 'el', 'ef', 'str', 'tot', 'k', 'p']);
@@ -376,6 +387,12 @@ function suggestionsFor(word) {
   const idx = indexSuggestion(word);
   if (!idx) return found;
   return idx.strong ? [idx, ...found.slice(0, 6)] : [...found.slice(0, 6), idx];
+}
+
+function lookupPhrase(phrase) {
+  const w = fold(phrase);
+  return DICT.filter(d => d.keys.some(k => k.includes(' ') && k.startsWith(w)))
+    .sort((a, b) => a.name.length - b.name.length).slice(0, 7);
 }
 
 function lookup(word) {
@@ -637,6 +654,10 @@ ed.addEventListener('beforeinput', e => {
     if (map[ch]) { e.preventDefault(); replaceRange(s, end, map[ch]); return; }
     if (modeAuto) setMode(null); else return;
   }
+  // typing the closing sign of a pair steps over the one already there
+  if (s === end && CLOSERS.has(ch) && ed.value[s] === ch && WRAP_OPEN[ch] && ed.value.lastIndexOf(WRAP_OPEN[ch], s - 1) >= 0) {
+    e.preventDefault(); ed.setSelectionRange(s + 1, s + 1); return;
+  }
   if (!autoFix.checked || s !== end) return;
 
   const before = ed.value.slice(0, s);
@@ -700,6 +721,16 @@ function refreshSuggest() {
   const m = before.match(/\p{L}[\p{L}\d]*$/u);
   const after = ed.value.slice(s, s + 1);
   if (!m || /\p{L}/u.test(after) || before.slice(-m[0].length - 1, -m[0].length) === '\\') return hideSuggest();
+  // Multi-word names ("absolutní hodnota", "kinetická energie"): prefer the longest phrase that matches
+  const words = (before.match(/(?:\p{L}+ ){1,3}\p{L}+$/u) || [''])[0].split(' ');
+  for (let k = words.length; k >= 2; k--) {
+    const phrase = words.slice(-k).join(' ');
+    const hits = lookupPhrase(phrase);
+    if (hits.length) {
+      sug = { items: hits, index: 0, start: s - phrase.length, end: s, moved: false };
+      return renderSuggest();
+    }
+  }
   const items = suggestionsFor(m[0]);
   if (!items.length) return hideSuggest();
   sug = { items, index: 0, start: s - m[0].length, end: s, moved: false };
@@ -738,7 +769,13 @@ function acceptSuggest() {
   if (!d) return;
   const { start, end } = sug;
   hideSuggest();
-  replaceRange(start, end, d.sym);
+  if (d.wrap) {
+    replaceRange(start, end, d.wrap[0] + d.wrap[1]);
+    const caret = start + d.wrap[0].length;
+    ed.setSelectionRange(caret, caret);
+  } else {
+    replaceRange(start, end, d.sym);
+  }
 }
 
 ed.addEventListener('keydown', e => {
@@ -771,7 +808,13 @@ ed.addEventListener('keydown', e => {
     if (e.code === 'KeyB') { e.preventDefault(); applyBold(); return; }
   }
   if (e.key === 'Escape') { resetModes(); return; }
-  if (e.key === 'Tab') { e.preventDefault(); insert('\t'); return; }
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = ed.selectionStart;
+    if (s === ed.selectionEnd && CLOSERS.has(ed.value[s])) ed.setSelectionRange(s + 1, s + 1);
+    else insert('\t');
+    return;
+  }
   if (modeAuto && /^(Arrow|Home|End|Page)/.test(e.key)) setMode(null);
 });
 
@@ -915,7 +958,7 @@ const TABS = {
       ['\\vec F', 'F⃗'], ['\\hat x', 'x̂'], ['\\dot x', 'ẋ'], ['\\sqrt', '√'], ['\\deg', '°'], ['\\inf', '∞'],
       ['\\hbar', 'ħ'], ['\\micro', 'µ'], ['\\Ohm', 'Ω'], ['a*b', 'a·b'], ['->', '→'], ['=>', '⇒'],
       ['<=  >=', '≤  ≥'], ['!=', '≠'], ['~=', '≈'], ['+-', '±'],
-      ['alfa + Tab', 'α'], ['Delta + Tab', 'Δ'], ['síla + Tab', 'F nebo F⃗'], ['newton + Tab', 'N'], ['Wel + Tab', 'Wₑₗ'], ['Fmax + Tab', 'Fₘₐₓ'],
+      ['alfa + Tab', 'α'], ['Delta + Tab', 'Δ'], ['síla + Tab', 'F nebo F⃗'], ['newton + Tab', 'N'], ['Wel + Tab', 'Wₑₗ'], ['absolutní hodnota + Tab', '|…|'], ['Fmax + Tab', 'Fₘₐₓ'],
       ['Alt + ↑ / ↓', 'horní / dolní index'], ['Alt + V', 'šipka nad písmenem'], ['Alt + B', 'tučně'], ['Esc', 'zruší režim']
     ];
     const tbl = document.createElement('table'); tbl.className = 'keys';
