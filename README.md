@@ -13,6 +13,7 @@ Stačí otevřít `index.html` v prohlížeči, poznámky se ukládají do prohl
 | `\vec F` / Alt+V | F⃗ |
 | `a*b` | a·b |
 | `->`, `<=`, `>=`, `!=`, `~=`, `+-` | →, ≤, ≥, ≠, ≈, ± |
+| `alfa`, `síla`, `newton` + Tab | α, F / F⃗, N (našeptávač) |
 | Alt+↑ / Alt+↓ | režim horního / dolního indexu |
 | Alt+B | tučný vektor 𝐅 |
 

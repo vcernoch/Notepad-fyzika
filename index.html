@@ -94,7 +94,23 @@ button { cursor: pointer; }
 .note-meta { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* Editor */
-.editor-wrap { grid-area: editor; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.editor-wrap { grid-area: editor; display: flex; flex-direction: column; min-height: 0; min-width: 0; position: relative; }
+.suggest {
+  position: absolute; z-index: 5; width: min(320px, calc(100% - 32px)); background: var(--sheet);
+  border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgb(0 0 0 / .14);
+  padding: 4px; margin: 0; list-style: none;
+}
+.suggest li {
+  display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; align-items: center; gap: 8px;
+  padding: 5px 8px; border-radius: 5px; cursor: pointer;
+}
+.suggest li[aria-selected="true"] { background: var(--accent-soft); }
+.suggest .s-sym { font-family: var(--font-math); font-size: 21px; text-align: center; white-space: nowrap; overflow: hidden; }
+.suggest .s-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.suggest .s-name small { color: var(--muted); margin-left: 6px; }
+.suggest .s-kind { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.suggest .s-foot { display: block; padding: 4px 8px 2px; font-size: 11.5px; color: var(--muted); border-top: 1px solid var(--line); margin-top: 2px; cursor: default; }
+.suggest .s-foot kbd { font-family: var(--font-mono); font-size: 10.5px; padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; }
 .editor {
   flex: 1; min-height: 0; width: 100%; resize: none; border: 0; outline: none;
   padding: 0 24px var(--row) 64px;
@@ -209,11 +225,13 @@ button { cursor: pointer; }
 
   <main class="editor-wrap">
     <textarea class="editor" id="editor" spellcheck="false" aria-label="Text poznámky"
-      placeholder="Piš vzorce… např. F = m·a,  v_0 → v₀,  x^2 → x²,  \alpha → α"></textarea>
+      placeholder="Piš vzorce… např. F = m·a,  v_0 → v₀,  x^2 → x²,  alfa + Tab → α"></textarea>
+    <ul class="suggest" id="suggest" role="listbox" aria-label="Návrhy značek" hidden></ul>
     <div class="status">
       <span id="stats">0 znaků</span>
       <span>Režim: <span class="pill" id="modePill">normální</span></span>
       <label><input type="checkbox" id="autoFix" checked> Automatické převody</label>
+      <label><input type="checkbox" id="suggestOn" checked> Našeptávač značek</label>
       <span class="spacer"></span>
       <span id="saved">Uloženo</span>
     </div>
@@ -263,6 +281,101 @@ const EXTRA = [['micro','µ'],['Ohm','Ω'],['AA','Å'],['celsius','°C'],['permi
 
 const CMD = Object.create(null);
 [...GREEK, ...OPS, ...EXTRA].forEach(([k, v]) => { CMD[k] = v; });
+
+/* Word → symbol dictionary for the suggestion popup */
+const GREEK_NAMES = [
+  // Czech name, lowercase, uppercase, other spellings
+  ['alfa','α','Α',['alpha']], ['beta','β','Β'], ['gama','γ','Γ',['gamma']], ['delta','δ','Δ'],
+  ['epsilon','ε','Ε'], ['zéta','ζ','Ζ',['zeta']], ['éta','η','Η',['eta']], ['théta','θ','Θ',['theta']],
+  ['ióta','ι','Ι',['iota']], ['kappa','κ','Κ',['kapa']], ['lambda','λ','Λ'], ['mí','μ','Μ',['mu']],
+  ['ný','ν','Ν',['nu']], ['ksí','ξ','Ξ',['xi']], ['omikron','ο','Ο'], ['pí','π','Π',['pi']],
+  ['ró','ρ','Ρ',['rho']], ['sigma','σ','Σ'], ['tau','τ','Τ'], ['ypsilon','υ','Υ',['upsilon']],
+  ['fí','φ','Φ',['phi']], ['chí','χ','Χ',['chi']], ['psí','ψ','Ψ',['psi']], ['omega','ω','Ω']
+];
+const QUANTITIES = [
+  // name, symbol, unit, is vector
+  ['dráha','s','m',true], ['délka','l','m'], ['výška','h','m'], ['poloměr','r','m'], ['průměr','d','m'],
+  ['polohový vektor','r⃗','m'], ['posunutí','s⃗','m'], ['výchylka','y','m'], ['amplituda','yₘ','m'],
+  ['vlnová délka','λ','m'], ['čas','t','s'], ['perioda','T','s'], ['doba kmitu','T','s'],
+  ['frekvence','f','Hz'], ['kmitočet','f','Hz'], ['rychlost','v','m·s⁻¹',true], ['zrychlení','a','m·s⁻²',true],
+  ['tíhové zrychlení','g','m·s⁻²',true], ['úhlová rychlost','ω','rad·s⁻¹',true], ['úhlová frekvence','ω','rad·s⁻¹'],
+  ['úhel','α','rad'], ['fáze','φ','rad'], ['hmotnost','m','kg'], ['síla','F','N',true], ['tíhová síla','F_g','N',true],
+  ['třecí síla','Fₜ','N',true], ['normálová síla','Fₙ','N',true], ['hybnost','p','kg·m·s⁻¹',true],
+  ['impulz','I','N·s',true], ['moment síly','M','N·m',true], ['moment setrvačnosti','J','kg·m²'],
+  ['moment hybnosti','L','kg·m²·s⁻¹',true], ['tuhost','k','N·m⁻¹'], ['součinitel tření','f',''],
+  ['práce','W','J'], ['energie','E','J'], ['kinetická energie','Eₖ','J'], ['potenciální energie','Eₚ','J'],
+  ['výkon','P','W'], ['příkon','P₀','W'], ['účinnost','η',''], ['tlak','p','Pa'], ['hustota','ρ','kg·m⁻³'],
+  ['objem','V','m³'], ['obsah','S','m²'], ['plocha','S','m²'], ['teplota','T','K'], ['teplota','t','°C'],
+  ['teplo','Q','J'], ['měrná tepelná kapacita','c','J·kg⁻¹·K⁻¹'], ['tepelná kapacita','C','J·K⁻¹'],
+  ['vnitřní energie','U','J'], ['látkové množství','n','mol'], ['molární hmotnost','Mₘ','kg·mol⁻¹'],
+  ['počet částic','N',''], ['součinitel teplotní roztažnosti','α','K⁻¹'],
+  ['náboj','Q','C'], ['elektrický náboj','Q','C'], ['napětí','U','V'], ['elektrický proud','I','A'],
+  ['proud','I','A'], ['odpor','R','Ω'], ['rezistivita','ρ','Ω·m'], ['vodivost','G','S'], ['kapacita','C','F'],
+  ['intenzita elektrického pole','E','V·m⁻¹',true], ['elektrický potenciál','φ','V'],
+  ['magnetická indukce','B','T',true], ['magnetický indukční tok','Φ','Wb'], ['indukčnost','L','H'],
+  ['permitivita','ε','F·m⁻¹'], ['permeabilita','μ','H·m⁻¹'], ['index lomu','n',''],
+  ['ohnisková vzdálenost','f','m'], ['optická mohutnost','φ','D'], ['rychlost světla','c','m·s⁻¹'],
+  ['aktivita','A','Bq'], ['přeměnová konstanta','λ','s⁻¹'], ['poločas přeměny','T½','s'],
+  ['nukleonové číslo','A',''], ['protonové číslo','Z',''], ['neutronové číslo','N','']
+];
+const UNIT_NAMES = [
+  ['metr','m'], ['kilometr','km'], ['centimetr','cm'], ['milimetr','mm'], ['mikrometr','µm'], ['nanometr','nm'],
+  ['metr čtvereční','m²'], ['metr krychlový','m³'], ['litr','l'], ['kilogram','kg'], ['gram','g'], ['tuna','t'],
+  ['sekunda','s'], ['minuta','min'], ['hodina','h'], ['ampér','A'], ['miliampér','mA'], ['kelvin','K'],
+  ['mol','mol'], ['kandela','cd'], ['newton','N'], ['kilonewton','kN'], ['joule','J'], ['kilojoule','kJ'],
+  ['megajoule','MJ'], ['watt','W'], ['kilowatt','kW'], ['megawatt','MW'], ['kilowatthodina','kWh'],
+  ['pascal','Pa'], ['kilopascal','kPa'], ['hektopascal','hPa'], ['megapascal','MPa'], ['bar','bar'],
+  ['atmosféra','atm'], ['hertz','Hz'], ['kilohertz','kHz'], ['megahertz','MHz'], ['coulomb','C'],
+  ['volt','V'], ['kilovolt','kV'], ['milivolt','mV'], ['ohm','Ω'], ['kiloohm','kΩ'], ['farad','F'],
+  ['mikrofarad','µF'], ['tesla','T'], ['weber','Wb'], ['henry','H'], ['siemens','S'], ['lumen','lm'],
+  ['lux','lx'], ['becquerel','Bq'], ['gray','Gy'], ['sievert','Sv'], ['radián','rad'], ['steradián','sr'],
+  ['stupeň','°'], ['stupeň celsia','°C'], ['elektronvolt','eV'], ['ångström','Å',['angstrom']],
+  ['dioptrie','D'], ['metr za sekundu','m·s⁻¹'], ['metr za sekundu na druhou','m·s⁻²'],
+  ['kilometr za hodinu','km·h⁻¹'], ['kilogram na metr krychlový','kg·m⁻³'], ['newtonmetr','N·m'],
+  ['newton na metr','N·m⁻¹'], ['joule na kilogram a kelvin','J·kg⁻¹·K⁻¹'], ['radián za sekundu','rad·s⁻¹']
+];
+const OTHER_NAMES = [
+  ['nekonečno','∞'], ['odmocnina','√'], ['přibližně','≈'], ['krát','·'], ['vektorový součin','×'],
+  ['plus minus','±'], ['nerovná se','≠'], ['menší nebo rovno','≤'], ['větší nebo rovno','≥'],
+  ['úměrné','∝'], ['integrál','∫'], ['suma','∑'], ['parciální derivace','∂'], ['nabla','∇'],
+  ['kolmý','⊥'], ['rovnoběžný','∥'], ['šipka','→'], ['implikace','⇒'], ['mikro','µ'], ['polovina','½'],
+  ['h s pruhem','ħ'], ['redukovaná planckova konstanta','ħ']
+];
+
+const fold = str => str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const DICT = [];
+GREEK_NAMES.forEach(([name, lo, up, alt = []]) => {
+  const keys = [name, ...alt].map(fold);
+  DICT.push({ name, sym: lo, kind: 'písmeno', note: 'malé', keys, upper: false });
+  DICT.push({ name: name[0].toUpperCase() + name.slice(1), sym: up, kind: 'písmeno', note: 'velké', keys, upper: true });
+});
+QUANTITIES.forEach(([name, sym, unit, vec]) => {
+  const note = unit ? '[' + unit + ']' : '';
+  DICT.push({ name, sym, kind: 'veličina', note, keys: [fold(name)] });
+  if (vec) DICT.push({ name, sym: sym + '⃗', kind: 'vektor', note, keys: [fold(name)] });
+});
+UNIT_NAMES.forEach(([name, sym, alt = []]) => DICT.push({ name, sym, kind: 'jednotka', note: '', keys: [name, ...alt].map(fold) }));
+OTHER_NAMES.forEach(([name, sym]) => DICT.push({ name, sym, kind: 'znak', note: '', keys: [fold(name)] }));
+
+function lookup(word) {
+  const w = fold(word);
+  if (w.length < 2) return [];
+  const capital = word[0] !== word[0].toLowerCase();
+  const hits = [];
+  DICT.forEach((d, i) => {
+    let score = -1;
+    d.keys.forEach(k => {
+      if (k === w) score = Math.max(score, 3);
+      else if (k.startsWith(w)) score = Math.max(score, 2);
+      else if (w.length >= 3 && k.split(' ').some(part => part.startsWith(w))) score = Math.max(score, 1);
+    });
+    if (score < 0) return;
+    if (d.upper !== undefined && d.upper === capital) score += 0.5;
+    hits.push({ d, score, i });
+  });
+  hits.sort((a, b) => b.score - a.score || a.d.name.length - b.d.name.length || a.i - b.i);
+  return hits.slice(0, 7).map(h => h.d);
+}
 
 const PAIRS = { '->':'→', '<-':'←', '=>':'⇒', '<=':'≤', '>=':'≥', '!=':'≠', '~=':'≈', '+-':'±', '-+':'∓' };
 
@@ -537,8 +650,98 @@ ed.addEventListener('beforeinput', e => {
   if (ch === '*') { e.preventDefault(); replaceRange(s, s, '·'); return; }
 });
 
+/* ---------- Suggestions: type a name (alfa, síla, newton…) and pick its symbol ---------- */
+const suggestEl = $('suggest'), suggestOn = $('suggestOn');
+let sug = { items: [], index: 0, start: 0, end: 0, moved: false };
+
+const mirror = document.createElement('div');
+function caretXY(pos) {
+  const cs = getComputedStyle(ed);
+  ['fontFamily','fontSize','fontWeight','fontStyle','lineHeight','letterSpacing','tabSize','paddingTop',
+   'paddingRight','paddingBottom','paddingLeft','borderTopWidth','borderRightWidth','borderBottomWidth',
+   'borderLeftWidth','boxSizing','wordSpacing','textIndent'].forEach(p => { mirror.style[p] = cs[p]; });
+  Object.assign(mirror.style, { position: 'absolute', visibility: 'hidden', top: '0', left: '-9999px',
+    whiteSpace: 'pre-wrap', overflowWrap: 'break-word', width: ed.clientWidth + 'px' });
+  mirror.textContent = ed.value.slice(0, pos);
+  const mark = document.createElement('span'); mark.textContent = '​';
+  mirror.append(mark);
+  document.body.append(mirror);
+  const xy = { x: mark.offsetLeft, y: mark.offsetTop, h: parseFloat(cs.lineHeight) || 32 };
+  mirror.remove();
+  return xy;
+}
+
+function hideSuggest() { suggestEl.hidden = true; sug.items = []; }
+function refreshSuggest() {
+  const s = ed.selectionStart;
+  if (!suggestOn.checked || s !== ed.selectionEnd || mode || pendingComb || document.activeElement !== ed) return hideSuggest();
+  const before = ed.value.slice(0, s);
+  const m = before.match(/\p{L}+$/u);
+  const after = ed.value.slice(s, s + 1);
+  if (!m || /\p{L}/u.test(after) || before.slice(-m[0].length - 1, -m[0].length) === '\\') return hideSuggest();
+  const items = lookup(m[0]);
+  if (!items.length) return hideSuggest();
+  sug = { items, index: 0, start: s - m[0].length, end: s, moved: false };
+  renderSuggest();
+}
+function renderSuggest() {
+  suggestEl.innerHTML = '';
+  sug.items.forEach((d, i) => {
+    const li = document.createElement('li');
+    li.setAttribute('role', 'option');
+    li.setAttribute('aria-selected', i === sug.index ? 'true' : 'false');
+    li.innerHTML = '<span class="s-sym"></span><span class="s-name"></span><span class="s-kind"></span>';
+    li.querySelector('.s-sym').textContent = d.sym;
+    const nm = li.querySelector('.s-name'); nm.textContent = d.name;
+    if (d.note) { const sm = document.createElement('small'); sm.textContent = d.note; nm.append(sm); }
+    li.querySelector('.s-kind').textContent = d.kind;
+    li.addEventListener('mousedown', e => { e.preventDefault(); sug.index = i; acceptSuggest(); });
+    suggestEl.append(li);
+  });
+  const foot = document.createElement('li'); foot.className = 's-foot';
+  foot.innerHTML = '<kbd>Tab</kbd> vloží · <kbd>↑</kbd><kbd>↓</kbd> výběr · <kbd>Esc</kbd> zavře';
+  suggestEl.append(foot);
+  suggestEl.hidden = false;
+
+  const c = caretXY(sug.start);
+  const wrapW = ed.clientWidth, boxW = suggestEl.offsetWidth, boxH = suggestEl.offsetHeight;
+  let x = ed.offsetLeft + c.x - 8;
+  x = Math.max(8, Math.min(x, wrapW - boxW - 8));
+  let y = ed.offsetTop + c.y - ed.scrollTop + c.h + 2;
+  if (y + boxH > ed.offsetTop + ed.clientHeight && y - c.h - boxH - 4 > 0) y = y - c.h - boxH - 4;
+  suggestEl.style.left = x + 'px';
+  suggestEl.style.top = y + 'px';
+}
+function acceptSuggest() {
+  const d = sug.items[sug.index];
+  if (!d) return;
+  const { start, end } = sug;
+  hideSuggest();
+  replaceRange(start, end, d.sym);
+}
+
+ed.addEventListener('keydown', e => {
+  if (suggestEl.hidden) return;
+  const n = sug.items.length;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault(); e.stopImmediatePropagation();
+    sug.index = (sug.index + (e.key === 'ArrowDown' ? 1 : n - 1)) % n; sug.moved = true;
+    renderSuggest();
+  } else if (e.key === 'Tab' || (e.key === 'Enter' && sug.moved)) {
+    e.preventDefault(); e.stopImmediatePropagation(); acceptSuggest();
+  } else if (e.key === 'Escape') {
+    e.stopImmediatePropagation(); hideSuggest();
+  } else if (/^(ArrowLeft|ArrowRight|Home|End|Page|Enter)/.test(e.key)) {
+    hideSuggest();
+  }
+});
+ed.addEventListener('input', () => { if (!busy) refreshSuggest(); });
+ed.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== ed) hideSuggest(); }, 100));
+ed.addEventListener('scroll', hideSuggest);
+suggestOn.addEventListener('change', hideSuggest);
+
 ed.addEventListener('input', () => { if (!busy) touch(); });
-ed.addEventListener('mousedown', () => { if (modeAuto) setMode(null); });
+ed.addEventListener('mousedown', () => { hideSuggest(); if (modeAuto) setMode(null); });
 ed.addEventListener('keydown', e => {
   if (e.altKey && !e.ctrlKey && !e.metaKey) {
     if (e.key === 'ArrowUp') { e.preventDefault(); setMode(mode === 'sup' ? null : 'sup'); return; }
@@ -691,12 +894,13 @@ const TABS = {
       ['\\vec F', 'F⃗'], ['\\hat x', 'x̂'], ['\\dot x', 'ẋ'], ['\\sqrt', '√'], ['\\deg', '°'], ['\\inf', '∞'],
       ['\\hbar', 'ħ'], ['\\micro', 'µ'], ['\\Ohm', 'Ω'], ['a*b', 'a·b'], ['->', '→'], ['=>', '⇒'],
       ['<=  >=', '≤  ≥'], ['!=', '≠'], ['~=', '≈'], ['+-', '±'],
+      ['alfa + Tab', 'α'], ['Delta + Tab', 'Δ'], ['síla + Tab', 'F nebo F⃗'], ['newton + Tab', 'N'],
       ['Alt + ↑ / ↓', 'horní / dolní index'], ['Alt + V', 'šipka nad písmenem'], ['Alt + B', 'tučně'], ['Esc', 'zruší režim']
     ];
     const tbl = document.createElement('table'); tbl.className = 'keys';
     rows.forEach(([k, v]) => { const tr = tbl.insertRow(); tr.insertCell().textContent = k; tr.insertCell().textContent = v; });
     const p = document.createElement('p'); p.className = 'hint';
-    p.textContent = 'Příkaz se zobrazí po mezeře nebo jiném znaku. Všechny názvy řeckých písmen fungují jako v LaTeXu (\\omega, \\Phi…). Text je obyčejný Unicode, takže jde zkopírovat do Wordu, e-mailu i chatu.';
+    p.textContent = 'Stačí začít psát český název písmena, veličiny nebo jednotky a nabídnou se značky. Velké písmeno na začátku (Delta, Omega) nabídne velké řecké písmeno. Příkaz s lomítkem se zobrazí po mezeře nebo jiném znaku. Všechny názvy řeckých písmen fungují jako v LaTeXu (\\omega, \\Phi…). Text je obyčejný Unicode, takže jde zkopírovat do Wordu, e-mailu i chatu.';
     return [label('Při psaní'), tbl, p];
   }
 };
