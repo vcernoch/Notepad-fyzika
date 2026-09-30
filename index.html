@@ -743,10 +743,64 @@ function caretXY(pos) {
 }
 
 function hideSuggest() { suggestEl.hidden = true; sug.items = []; }
+/* Typing "/" offers ways to build a fraction; the text before the slash becomes the numerator */
+const VULGAR = { '1/2':'½','1/3':'⅓','2/3':'⅔','1/4':'¼','3/4':'¾','1/5':'⅕','2/5':'⅖','3/5':'⅗','4/5':'⅘',
+  '1/6':'⅙','5/6':'⅚','1/7':'⅐','1/8':'⅛','3/8':'⅜','5/8':'⅝','7/8':'⅞','1/9':'⅑','1/10':'⅒' };
+function numeratorStart(before) {
+  // before = text up to (not including) the slash
+  if (before.endsWith(')')) {
+    let depth = 0;
+    for (let i = before.length - 1; i >= 0; i--) {
+      if (before[i] === ')') depth++;
+      else if (before[i] === '(' && --depth === 0) return i;
+    }
+    return -1;
+  }
+  const m = before.match(/[^\s=(\[{,;:+\-−<>≤≥≈≠±]+$/u);
+  return m ? before.length - m[0].length : before.length;
+}
+function fractionItems(s) {
+  const slash = s - 1;
+  const before = ed.value.slice(0, slash);
+  const ns = numeratorStart(before);
+  if (ns < 0) return [];
+  const num = before.slice(ns);
+  const items = [];
+  const put = (from, text, caretOffset) => () => {
+    replaceRange(from, s, text);
+    const c = from + caretOffset;
+    ed.setSelectionRange(c, c);
+  };
+  if (!num) {
+    items.push({ name: 'Zlomek', sym: '(…)/(…)', kind: 'zlomek', note: 'Tab přeskočí do jmenovatele', action: put(slash, '()/()', 1) });
+  } else {
+    items.push({ name: 'Jmenovatel v závorce', sym: num + '/(…)', kind: 'zlomek', note: '', action: put(slash, '/()', 2) });
+    if (Array.from(num).length > 1 && !num.startsWith('(')) {
+      items.push({ name: 'Celý zlomek v závorkách', sym: '(' + num + ')/(…)', kind: 'zlomek', note: '', action: put(ns, '(' + num + ')/()', num.length + 4) });
+    }
+    const chars = Array.from(num);
+    if (chars.length <= 3 && chars.every(c => SUP[c])) {
+      items.push({ name: 'Malý zlomek', sym: chars.map(c => SUP[c]).join('') + '⁄…', kind: 'zlomek', note: 'jmenovatel píšeš dolů',
+        action: () => { replaceRange(ns, s, chars.map(c => SUP[c]).join('') + '⁄'); setMode('sub', true); } });
+    }
+    Object.entries(VULGAR).filter(([k]) => k.startsWith(num + '/')).slice(0, 4).forEach(([k, v]) => {
+      items.push({ name: k, sym: v, kind: 'zlomek', note: '', action: put(ns, v, v.length) });
+    });
+  }
+  items.push({ name: 'Jen lomítko', sym: '/', kind: 'nechat', note: '', action: () => {} });
+  return items;
+}
+
 function refreshSuggest() {
   const s = ed.selectionStart;
   if (!suggestOn.checked || s !== ed.selectionEnd || mode || pendingComb || document.activeElement !== ed) return hideSuggest();
   const before = ed.value.slice(0, s);
+  if (before.endsWith('/') && !before.endsWith('//') && !/[\p{L}\d]/u.test(ed.value.slice(s, s + 1))) {
+    const items = fractionItems(s);
+    if (!items.length) return hideSuggest();
+    sug = { items, index: 0, start: s - 1, end: s, moved: false };
+    return renderSuggest();
+  }
   const m = before.match(/\p{L}[\p{L}\d]*$/u);
   const after = ed.value.slice(s, s + 1);
   if (!m || /\p{L}/u.test(after) || before.slice(-m[0].length - 1, -m[0].length) === '\\') return hideSuggest();
@@ -798,7 +852,9 @@ function acceptSuggest() {
   if (!d) return;
   const { start, end } = sug;
   hideSuggest();
-  if (d.wrap) {
+  if (d.action) {
+    d.action();
+  } else if (d.wrap) {
     replaceRange(start, end, d.wrap[0] + d.wrap[1]);
     const caret = start + d.wrap[0].length;
     ed.setSelectionRange(caret, caret);
@@ -840,7 +896,9 @@ ed.addEventListener('keydown', e => {
   if (e.key === 'Tab') {
     e.preventDefault();
     const s = ed.selectionStart;
-    if (s === ed.selectionEnd && CLOSERS.has(ed.value[s])) ed.setSelectionRange(s + 1, s + 1);
+    if (mode) { resetModes(); return; }
+    if (s === ed.selectionEnd && ed.value.startsWith(')/(', s)) ed.setSelectionRange(s + 3, s + 3);
+    else if (s === ed.selectionEnd && CLOSERS.has(ed.value[s])) ed.setSelectionRange(s + 1, s + 1);
     else insert('\t');
     return;
   }
@@ -987,7 +1045,7 @@ const TABS = {
       ['\\vec F', 'F⃗'], ['\\hat x', 'x̂'], ['\\dot x', 'ẋ'], ['\\sqrt', '√'], ['\\deg', '°'], ['\\inf', '∞'],
       ['\\hbar', 'ħ'], ['\\micro', 'µ'], ['\\Ohm', 'Ω'], ['a*b', 'a·b'], ['->', '→'], ['=>', '⇒'],
       ['<=  >=', '≤  ≥'], ['!=', '≠'], ['~=', '≈'], ['+-', '±'],
-      ['alfa + Tab', 'α'], ['Delta + Tab', 'Δ'], ['síla + Tab', 'F nebo F⃗'], ['newton + Tab', 'N'], ['Wel + Tab', 'Wₑₗ'], ['absolutní hodnota + Tab', '|…|'], ['Fmax + Tab', 'Fₘₐₓ'],
+      ['alfa + Tab', 'α'], ['Delta + Tab', 'Δ'], ['síla + Tab', 'F nebo F⃗'], ['newton + Tab', 'N'], ['Wel + Tab', 'Wₑₗ'], ['absolutní hodnota + Tab', '|…|'], ['m·v/ + Tab', 'm·v/(…)'], ['1/ + výběr', '½ ⅓ ¼'], ['Fmax + Tab', 'Fₘₐₓ'],
       ['Alt + ↑ / ↓', 'horní / dolní index'], ['Alt + V', 'šipka nad písmenem'], ['Alt + B', 'tučně'], ['Esc', 'zruší režim']
     ];
     const tbl = document.createElement('table'); tbl.className = 'keys';
