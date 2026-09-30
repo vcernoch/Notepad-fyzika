@@ -224,7 +224,7 @@ button { cursor: pointer; }
   </aside>
 
   <main class="editor-wrap">
-    <textarea class="editor" id="editor" spellcheck="false" aria-label="Text poznámky"
+    <textarea class="editor" id="editor" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" data-gramm="false" aria-label="Text poznámky"
       placeholder="Piš vzorce… např. F = m·a,  v_0 → v₀,  x^2 → x²,  alfa + Tab → α"></textarea>
     <ul class="suggest" id="suggest" role="listbox" aria-label="Návrhy značek" hidden></ul>
     <div class="status">
@@ -269,7 +269,7 @@ const GREEK = [
   ['Phi','Φ'],['Psi','Ψ'],['Omega','Ω']
 ];
 const OPS = [
-  ['cdot','·'],['times','×'],['div','÷'],['pm','±'],['mp','∓'],['neq','≠'],['approx','≈'],
+  ['eq','='],['cdot','·'],['times','×'],['div','÷'],['pm','±'],['mp','∓'],['neq','≠'],['approx','≈'],
   ['doteq','≐'],['equiv','≡'],['sim','∼'],['prop','∝'],['le','≤'],['ge','≥'],['ll','≪'],['gg','≫'],
   ['sqrt','√'],['cbrt','∛'],['inf','∞'],['partial','∂'],['nabla','∇'],['int','∫'],['iint','∬'],
   ['oint','∮'],['sum','∑'],['prod','∏'],['to','→'],['gets','←'],['implies','⇒'],['iff','⇔'],
@@ -635,8 +635,24 @@ function resetModes() { pendingComb = null; setMode(null); }
 
 const isLetter = ch => /\p{L}/u.test(ch);
 
+/* iPad "Math Results" fills in a computed number after "=" (E= → E=2,718).
+   Block that insertion, keep only a typed space if it came with it. */
+function isMathResult(e) {
+  if (!e.data || !/^(insertText|insertReplacementText)$/.test(e.inputType)) return false;
+  const data = e.data;
+  if (Array.from(data.trim()).length < 2) return false;
+  const s = ed.selectionStart;
+  const before = ed.value.slice(0, s);
+  const inserted = data.replace(/\s+$/, '');
+  return /=\s*$/.test(before) && /^\s*=?\s*[−\-+]?[\d\s ,.]+(e[−\-+]?\d+)?$/i.test(inserted);
+}
 ed.addEventListener('beforeinput', e => {
   if (busy) return;
+  if (isMathResult(e)) {
+    e.preventDefault();
+    if (/\s$/.test(e.data)) replaceRange(ed.selectionStart, ed.selectionEnd, ' ');
+    return;
+  }
   if (e.inputType !== 'insertText' || !e.data || Array.from(e.data).length !== 1) {
     if (e.inputType === 'insertLineBreak' || e.inputType === 'insertParagraph') resetModes();
     return;
@@ -910,9 +926,9 @@ const TABS = {
     label('Velká písmena'), grid(GREEK.slice(25).map(([k, v]) => symButton(v, '\\' + k)))
   ],
   'Operátory': () => [
-    label('Operace a relace'), grid(OPS.slice(0, 15).map(([k, v]) => symButton(v, '\\' + k))),
-    label('Analýza'), grid(OPS.slice(15, 25).map(([k, v]) => symButton(v, '\\' + k))),
-    label('Šipky, úhly a ostatní'), grid(OPS.slice(25).map(([k, v]) => symButton(v, '\\' + k)))
+    label('Operace a relace'), grid(OPS.slice(0, 16).map(([k, v]) => symButton(v, '\\' + k))),
+    label('Analýza'), grid(OPS.slice(16, 26).map(([k, v]) => symButton(v, '\\' + k))),
+    label('Šipky, úhly a ostatní'), grid(OPS.slice(26).map(([k, v]) => symButton(v, '\\' + k)))
   ],
   'Indexy': () => {
     const hint = document.createElement('p'); hint.className = 'hint';
