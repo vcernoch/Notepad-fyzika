@@ -21,3 +21,5 @@ Stačí otevřít `index.html` v prohlížeči, poznámky se ukládají do prohl
 | Alt+B | tučný vektor 𝐅 |
 
 V pravém panelu jsou řecká písmena, operátory, indexy, vektory, jednotky, konstanty a hotové vzorce.
+
+Přepínač **Psaní / Obojí / Papír** nahoře ukáže text tak, jak by se psal na papír: zlomky `a/b` a `(a+b)/(c-d)` pod sebou se zlomkovou čarou, odmocniny `√(…)` s čarou nad výrazem.

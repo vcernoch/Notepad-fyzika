@@ -124,6 +124,36 @@ button { cursor: pointer; }
   background-attachment: local;
 }
 .editor::placeholder { color: var(--muted); font-style: italic; }
+.view-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.view-switch button { border: 0; background: var(--sheet); padding: 6px 10px; font-size: 13px; font-weight: 500; }
+.view-switch button + button { border-left: 1px solid var(--line); }
+.view-switch button[aria-pressed="true"] { background: var(--ink); color: var(--sheet); }
+
+/* Paper view: the same text typeset the way it is written by hand */
+.preview {
+  flex: 1; min-height: 0; overflow: auto; background-color: var(--sheet);
+  border-top: 1px solid var(--line); padding: 10px 24px 24px 64px;
+  font-family: var(--font-math); font-size: 21px; line-height: 1.3; color: var(--ink);
+  background-image: linear-gradient(90deg, transparent 47px, var(--margin) 47px, var(--margin) 48px, transparent 48px);
+}
+.editor-wrap[data-view="edit"] .preview { display: none; }
+.editor-wrap[data-view="paper"] .editor { display: none; }
+.editor-wrap[data-view="paper"] .preview { border-top: 0; }
+.pv-line { min-height: 1.5em; padding: 3px 6px; margin-inline: -6px; border-radius: 4px; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; display: flex; align-items: center; flex-wrap: wrap; }
+.pv-line.cur { background: var(--accent-soft); }
+.pv-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-family: var(--font-ui); margin-bottom: 4px; }
+.frac { display: inline-flex; flex-direction: column; align-items: stretch; vertical-align: middle; text-align: center; margin: 0 .15em; line-height: 1.2; }
+.frac > .num { border-bottom: 1.5px solid currentColor; padding: 0 .25em .08em; }
+.frac > .den { padding: .08em .25em 0; }
+.frac .frac { font-size: .88em; }
+.rad { display: inline-flex; align-items: stretch; }
+.rad-sign { width: .7em; flex: none; position: relative; }
+.rad-sign svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.rad-sign path { fill: none; stroke: currentColor; stroke-width: 1.5px; stroke-linejoin: round; }
+.rad-index { font-size: .6em; align-self: flex-start; margin-right: -.45em; margin-top: .1em; }
+.rad-body { border-top: 1.5px solid currentColor; padding: .05em .15em 0; display: inline-flex; align-items: center; }
+.ph { display: inline-block; width: .7em; height: .9em; border: 1px dashed var(--muted); border-radius: 2px; vertical-align: middle; }
+
 .status {
   display: flex; gap: 14px; flex-wrap: wrap; align-items: center; padding: 6px 16px;
   border-top: 1px solid var(--line); background: var(--sheet); font-size: 12px; color: var(--muted);
@@ -194,6 +224,7 @@ button { cursor: pointer; }
   .notes { border-right: 0; border-bottom: 1px solid var(--line); max-height: 40vh; }
   .notes.collapsed { display: none; }
   .editor-wrap { height: 55vh; min-height: 300px; }
+  .editor-wrap[data-view="both"] { height: 80vh; }
   .editor { padding-left: 52px; font-size: 19px; background-image:
     linear-gradient(90deg, transparent 39px, var(--margin) 39px, var(--margin) 40px, transparent 40px),
     linear-gradient(var(--grid) 1px, transparent 1px),
@@ -211,6 +242,11 @@ button { cursor: pointer; }
     <button class="btn notes-toggle" id="notesToggle" type="button">Poznámky</button>
     <input class="title-input" id="title" type="text" placeholder="Název poznámky" aria-label="Název poznámky">
     <div class="actions">
+      <div class="view-switch" role="group" aria-label="Zobrazení">
+        <button type="button" data-view="edit">Psaní</button>
+        <button type="button" data-view="both">Obojí</button>
+        <button type="button" data-view="paper">Papír</button>
+      </div>
       <button class="btn primary" id="newNote" type="button">+ Nová</button>
       <button class="btn" id="copyNote" type="button">Kopírovat text</button>
       <button class="btn danger" id="deleteNote" type="button">Smazat</button>
@@ -223,10 +259,11 @@ button { cursor: pointer; }
     <ul class="note-list" id="noteList"></ul>
   </aside>
 
-  <main class="editor-wrap">
+  <main class="editor-wrap" id="editorWrap" data-view="both">
     <textarea class="editor" id="editor" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" data-gramm="false" aria-label="Text poznámky"
       placeholder="Piš vzorce… např. F = m·a,  v_0 → v₀,  x^2 → x²,  alfa + Tab → α"></textarea>
     <ul class="suggest" id="suggest" role="listbox" aria-label="Návrhy značek" hidden></ul>
+    <div class="preview" id="preview" aria-label="Náhled jako na papíře"></div>
     <div class="status">
       <span id="stats">0 znaků</span>
       <span>Režim: <span class="pill" id="modePill">normální</span></span>
@@ -604,12 +641,12 @@ function openNote(id) {
   state.current = id;
   const n = current();
   ed.value = n.body; titleEl.value = n.title;
-  resetModes(); renderList(); updateStats(); persist();
+  resetModes(); renderList(); updateStats(); renderPreview(); persist();
   hideConfirm();
 }
 function touch() {
   const n = current(); n.body = ed.value; n.title = titleEl.value; n.updated = Date.now();
-  updateStats(); scheduleSave(); renderList();
+  updateStats(); scheduleSave(); renderList(); renderPreview();
 }
 function updateStats() {
   const chars = Array.from(ed.value.normalize('NFC')).length;
@@ -1077,6 +1114,140 @@ function renderTabs() {
   setMode(mode, modeAuto);
 }
 
+/* ---------- Paper view: fractions stacked, roots with a bar ---------- */
+const previewEl = $('preview'), wrapEl = $('editorWrap');
+const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const STOP = new Set([...'=+-−<>≤≥≈≠±∓→⇒←⇔;:[]{}']);
+
+// Split a line into terms (products like m·v², sin(x), 2π·√(l/g)), slashes and separators
+function tokenize(str) {
+  const out = [];
+  let i = 0;
+  const pushPart = part => {
+    const last = out[out.length - 1];
+    if (last && last.type === 'term') last.parts.push(part); else out.push({ type: 'term', parts: [part] });
+  };
+  while (i < str.length) {
+    const c = str[i];
+    if (/\s/.test(c)) {
+      let j = i; while (j < str.length && /\s/.test(str[j])) j++;
+      out.push({ type: 'sep', text: str.slice(i, j) }); i = j;
+    } else if (c === '/') {
+      out.push({ type: 'slash' }); i++;
+    } else if (c === '(') {
+      let depth = 0, j = i;
+      for (; j < str.length; j++) { if (str[j] === '(') depth++; else if (str[j] === ')' && --depth === 0) break; }
+      if (j >= str.length) { out.push({ type: 'sep', text: c }); i++; continue; }
+      pushPart({ group: str.slice(i + 1, j) }); i = j + 1;
+    } else if (STOP.has(c) || c === ')' || (c === ',' && !(/\d/.test(str[i - 1] || '') && /\d/.test(str[i + 1] || '')))) {
+      out.push({ type: 'sep', text: c }); i++;
+    } else {
+      let j = i + 1;
+      while (j < str.length) {
+        const d = str[j];
+        if (/\s/.test(d) || d === '/' || d === '(' || d === ')' || STOP.has(d)) break;
+        if (d === ',' && !(/\d/.test(str[j - 1]) && /\d/.test(str[j + 1] || ''))) break;
+        j++;
+      }
+      pushPart({ atom: str.slice(i, j) }); i = j;
+    }
+  }
+  return out;
+}
+function renderTerm(term, bare) {
+  // bare: a lone (group) as numerator/denominator loses its parentheses
+  if (bare && term.parts.length === 1 && term.parts[0].group !== undefined) return renderSeq(term.parts[0].group);
+  let html = '';
+  term.parts.forEach((p, k) => {
+    if (p.atom !== undefined) {
+      const next = term.parts[k + 1];
+      const m = next && next.group !== undefined && p.atom.match(/[√∛∜]$/);
+      html += esc(m ? p.atom.slice(0, -1) : p.atom);
+      if (m) {
+        const index = { '∛': '3', '∜': '4' }[m[0]];
+        html += '<span class="rad">' + (index ? '<span class="rad-index">' + index + '</span>' : '') +
+          '<span class="rad-sign" aria-hidden="true"><svg viewBox="0 0 10 20" preserveAspectRatio="none"><path vector-effect="non-scaling-stroke" d="M0 12 L2.5 10.5 L5.5 19.5 L10 0.4"/></svg></span>' +
+          '<span class="rad-body">' + renderSeq(next.group) + '</span></span>';
+        next.done = true;
+      }
+    } else if (!p.done) {
+      html += '(' + renderSeq(p.group) + ')';
+    }
+    delete p.done;
+  });
+  return html;
+}
+function renderSeq(str) {
+  if (!str.trim()) return '<span class="ph"></span>';
+  const toks = tokenize(str);
+  const out = []; // rendered items: {html, term?}
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i];
+    if (t.type === 'slash') {
+      let a = out.length - 1; while (a >= 0 && out[a].space) a--;
+      let b = i + 1; while (b < toks.length && toks[b].type === 'sep' && !toks[b].text.trim()) b++;
+      const left = out[a], right = toks[b];
+      if (left && (left.term || left.frac) && right && right.type === 'term') {
+        out.length = a;
+        const num = left.frac ? left.html : renderTerm(left.term, true);
+        out.push({ frac: true, html: '<span class="frac"><span class="num">' + num + '</span><span class="den">' + renderTerm(right, true) + '</span></span>' });
+        i = b; continue;
+      }
+      out.push({ html: '/' });
+    } else if (t.type === 'term') {
+      out.push({ term: t, html: renderTerm(t, false) });
+    } else {
+      out.push({ html: esc(t.text), space: !t.text.trim() });
+    }
+  }
+  return out.map(o => o.html).join('');
+}
+
+let previewQueued = false;
+function renderPreview() {
+  if (wrapEl.dataset.view === 'edit' || previewQueued) return;
+  previewQueued = true;
+  requestAnimationFrame(() => {
+    previewQueued = false;
+    const lines = ed.value.split('\n');
+    const label = wrapEl.dataset.view === 'both' ? '<div class="pv-label">Jak to vypadá na papíře</div>' : '';
+    previewEl.innerHTML = label + lines.map((l, i) => '<div class="pv-line" data-line="' + i + '">' + (l.trim() ? renderSeq(l) : '') + '</div>').join('');
+    markCurrentLine();
+  });
+}
+function caretLine() { return ed.value.slice(0, ed.selectionStart).split('\n').length - 1; }
+function markCurrentLine() {
+  if (wrapEl.dataset.view !== 'both') return;
+  const n = caretLine();
+  previewEl.querySelectorAll('.pv-line.cur').forEach(el => el.classList.remove('cur'));
+  const el = previewEl.querySelector('[data-line="' + n + '"]');
+  if (!el) return;
+  el.classList.add('cur');
+  const top = el.offsetTop - previewEl.offsetTop, bottom = top + el.offsetHeight;
+  if (top < previewEl.scrollTop) previewEl.scrollTop = top - 8;
+  else if (bottom > previewEl.scrollTop + previewEl.clientHeight) previewEl.scrollTop = bottom - previewEl.clientHeight + 8;
+}
+document.addEventListener('selectionchange', () => { if (document.activeElement === ed) markCurrentLine(); });
+
+previewEl.addEventListener('click', e => {
+  const line = e.target.closest('.pv-line');
+  if (!line) return;
+  const n = +line.dataset.line;
+  const pos = ed.value.split('\n').slice(0, n).reduce((sum, l) => sum + l.length + 1, 0);
+  const end = pos + (ed.value.split('\n')[n] || '').length;
+  if (wrapEl.dataset.view === 'paper') setView('both');
+  ed.focus(); ed.setSelectionRange(end, end);
+});
+
+function setView(v) {
+  wrapEl.dataset.view = v;
+  document.querySelectorAll('.view-switch button').forEach(b => b.setAttribute('aria-pressed', b.dataset.view === v ? 'true' : 'false'));
+  try { localStorage.setItem(KEY + '-view', v); } catch (e) {}
+  hideSuggest();
+  renderPreview();
+}
+document.querySelectorAll('.view-switch button').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+
 /* ---------- Top bar ---------- */
 function toast(msg) {
   toastEl.textContent = msg; toastEl.hidden = false;
@@ -1105,6 +1276,9 @@ titleEl.addEventListener('input', touch);
 searchEl.addEventListener('input', renderList);
 
 if (matchMedia('(min-width: 821px)').matches) $('notes').classList.remove('collapsed');
+let savedView = 'both';
+try { savedView = localStorage.getItem(KEY + '-view') || 'both'; } catch (e) {}
+setView(['edit', 'both', 'paper'].includes(savedView) ? savedView : 'both');
 renderTabs();
 openNote(current().id);
 })();
