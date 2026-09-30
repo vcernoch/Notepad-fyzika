@@ -9,8 +9,8 @@ Stačí otevřít `index.html` v prohlížeči, poznámky se ukládají do prohl
 |---|---|
 | `x^2`, `10^-11` | x², 10⁻¹¹ |
 | `v_0`, `F_max` | v₀, Fₘₐₓ |
-| `\\alpha`, `\\Delta`, `\\omega` | α, Δ, ω |
-| `\\vec F` / Alt+V | F⃗ |
+| `\alpha`, `\Delta`, `\omega` | α, Δ, ω |
+| `\vec F` / Alt+V | F⃗ |
 | `a*b` | a·b |
 | `->`, `<=`, `>=`, `!=`, `~=`, `+-` | →, ≤, ≥, ≠, ≈, ± |
 | Alt+↑ / Alt+↓ | režim horního / dolního indexu |
