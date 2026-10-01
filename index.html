@@ -985,9 +985,20 @@ function renderSuggest() {
   suggestEl.style.left = x + 'px';
   suggestEl.style.top = y + 'px';
 }
-function acceptSuggest() {
+/* Tab inside a fraction or a pair of signs: numerator → denominator → out */
+function jumpOut() {
+  const s = ed.selectionStart;
+  if (s !== ed.selectionEnd) return false;
+  if (ed.value.startsWith(')/(', s)) { ed.setSelectionRange(s + 3, s + 3); return true; }
+  if (CLOSERS.has(ed.value[s])) { ed.setSelectionRange(s + 1, s + 1); return true; }
+  return false;
+}
+
+function acceptSuggest(thenJump) {
   const d = sug.items[sug.index];
   if (!d) return;
+  // a plain symbol finishes the word, so Tab also moves on (r2 + Tab in a denominator → r² and out)
+  if (thenJump && !d.action && !d.wrap) { acceptSuggest(false); jumpOut(); return; }
   const { start, end } = sug;
   hideSuggest();
   if (d.action) {
@@ -1009,7 +1020,7 @@ ed.addEventListener('keydown', e => {
     sug.index = (sug.index + (e.key === 'ArrowDown' ? 1 : n - 1)) % n; sug.moved = true;
     renderSuggest();
   } else if (e.key === 'Tab' || (e.key === 'Enter' && sug.moved)) {
-    e.preventDefault(); e.stopImmediatePropagation(); acceptSuggest();
+    e.preventDefault(); e.stopImmediatePropagation(); acceptSuggest(e.key === 'Tab');
   } else if (e.key === 'Escape') {
     e.stopImmediatePropagation(); hideSuggest();
   } else if (/^(ArrowLeft|ArrowRight|Home|End|Page|Enter)/.test(e.key)) {
@@ -1034,10 +1045,8 @@ ed.addEventListener('keydown', e => {
   if (e.key === 'Tab') {
     e.preventDefault();
     const s = ed.selectionStart;
-    if (mode) { resetModes(); return; }
-    if (s === ed.selectionEnd && ed.value.startsWith(')/(', s)) ed.setSelectionRange(s + 3, s + 3);
-    else if (s === ed.selectionEnd && CLOSERS.has(ed.value[s])) ed.setSelectionRange(s + 1, s + 1);
-    else insert('\t');
+    if (mode) { resetModes(); jumpOut(); return; }
+    if (!jumpOut()) insert('\t');
     return;
   }
   if (modeAuto && /^(Arrow|Home|End|Page)/.test(e.key)) setMode(null);
