@@ -39,6 +39,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { height: 100%; }
 body {
   margin: 0; background: var(--paper); color: var(--ink);
@@ -214,6 +215,29 @@ button { cursor: pointer; }
   background: var(--ink); color: var(--paper); padding: 8px 14px; border-radius: 6px; font-size: 13px;
 }
 
+.sheet-backdrop { position: fixed; inset: 0; background: rgb(10 14 24 / .35); display: grid; place-items: center; padding: 16px; z-index: 20; }
+.sheet {
+  width: min(460px, 100%); max-height: calc(100% - 32px); overflow-y: auto; background: var(--sheet); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 14px;
+  box-shadow: 0 16px 48px rgb(0 0 0 / .2);
+}
+.sheet h2 { margin: 0; font-family: var(--font-math); font-style: italic; font-size: 22px; font-weight: 600; }
+.sheet h3 { margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.sheet section { display: grid; gap: 8px; }
+.sheet .row { display: flex; gap: 6px; flex-wrap: wrap; }
+.sheet label.field { display: grid; gap: 3px; font-size: 12.5px; color: var(--muted); }
+.sheet input[type="text"], .sheet input[type="password"] {
+  border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; background: var(--paper); color: var(--ink); font-size: 14px; min-width: 0;
+}
+.sheet p { margin: 0; font-size: 13px; color: var(--muted); }
+.sheet ol { margin: 0; padding-left: 20px; font-size: 13px; color: var(--muted); display: grid; gap: 3px; }
+.sheet code { font-family: var(--font-mono); font-size: 12px; color: var(--ink); overflow-wrap: anywhere; }
+.sheet-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.gh-state { font-size: 13px; padding: 6px 10px; border-radius: 6px; background: var(--chip); color: var(--ink); }
+.gh-state.ok { background: var(--accent-soft); }
+.gh-state.err { color: var(--margin); }
+.sheet a { color: var(--accent); }
+
 @media (max-width: 1080px) {
   .app { grid-template-columns: 200px minmax(0, 1fr) 290px; }
 }
@@ -253,6 +277,7 @@ button { cursor: pointer; }
       </div>
       <button class="btn primary" id="newNote" type="button">+ Nová</button>
       <button class="btn" id="copyNote" type="button">Kopírovat text</button>
+      <button class="btn" id="syncOpen" type="button">Záloha</button>
       <button class="btn danger" id="deleteNote" type="button">Smazat</button>
       <button class="btn danger" id="confirmDelete" type="button" hidden>Opravdu smazat?</button>
     </div>
@@ -274,6 +299,7 @@ button { cursor: pointer; }
       <label><input type="checkbox" id="autoFix" checked> Automatické převody</label>
       <label><input type="checkbox" id="suggestOn" checked> Našeptávač značek</label>
       <span class="spacer"></span>
+      <span id="ghStatus" hidden></span>
       <span id="saved">Uloženo</span>
     </div>
   </main>
@@ -284,6 +310,55 @@ button { cursor: pointer; }
   </aside>
 </div>
 <div class="toast" id="toast" hidden></div>
+<div class="sheet-backdrop" id="syncSheet" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="syncTitle">
+    <div class="sheet-head">
+      <h2 id="syncTitle">Záloha poznámek</h2>
+      <button class="btn" id="syncClose" type="button">Zavřít</button>
+    </div>
+    <section>
+      <h3>Export</h3>
+      <div class="row">
+        <button class="btn primary" id="exportAll" type="button">Stáhnout všechny poznámky (.json)</button>
+        <button class="btn" id="exportOne" type="button">Tuto poznámku (.txt)</button>
+      </div>
+    </section>
+    <section>
+      <h3>Import</h3>
+      <p>Ze zálohy .json se poznámky sloučí s těmi tady (novější verze vyhrává). Soubor .txt se přidá jako nová poznámka.</p>
+      <div class="row">
+        <button class="btn" id="importBtn" type="button">Nahrát soubor…</button>
+        <input type="file" id="importFile" accept=".json,.txt,application/json,text/plain" hidden>
+      </div>
+    </section>
+    <section>
+      <h3>GitHub</h3>
+      <div class="gh-state" id="ghState">Ukládání na GitHub není nastavené.</div>
+      <p id="ghInClaude" hidden>V okně claude.ai se sešit k GitHubu připojit nemůže. Otevři ho přes GitHub Pages: <a href="https://vcernoch.github.io/Notepad-fyzika/" target="_blank" rel="noopener">vcernoch.github.io/Notepad-fyzika</a>. Poznámky odsud přeneseš exportem a importem.</p>
+      <p><b>Pozor:</b> repozitář Notepad-fyzika je veřejný, poznámky v něm uvidí kdokoli. Pro soukromé poznámky si na GitHubu založ soukromý repozitář (třeba <code>fyzika-poznamky</code>) a napiš jeho název níže.</p>
+      <label class="field">Přístupový token
+        <input type="password" id="ghToken" autocomplete="off" spellcheck="false" placeholder="github_pat_…">
+      </label>
+      <label class="field">Repozitář
+        <input type="text" id="ghRepo" autocomplete="off" spellcheck="false" autocapitalize="off">
+      </label>
+      <label class="field">Soubor v repozitáři
+        <input type="text" id="ghPath" autocomplete="off" spellcheck="false" autocapitalize="off">
+      </label>
+      <div class="row">
+        <button class="btn primary" id="ghConnect" type="button">Uložit a synchronizovat</button>
+        <button class="btn" id="ghSyncNow" type="button">Synchronizovat teď</button>
+        <button class="btn danger" id="ghForget" type="button">Odpojit</button>
+      </div>
+      <p>Token zůstává jen v tomto prohlížeči. Poznámky se pak ukládají do repozitáře samy, minutu po poslední změně a při zavření sešitu.</p>
+      <ol>
+        <li>Otevři <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a> (Settings → Developer settings → Fine-grained tokens).</li>
+        <li>U Repository access zvol Only select repositories a vyber repozitář pro poznámky. V Permissions přidej Contents a nastav <b>Read and write</b>.</li>
+        <li>Token zkopíruj sem a klepni na Uložit a synchronizovat.</li>
+      </ol>
+    </section>
+  </div>
+</div>
 
 <script>
 (() => {
@@ -606,10 +681,10 @@ function load() {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const data = JSON.parse(raw);
-      if (Array.isArray(data.notes) && data.notes.length) return data;
+      if (Array.isArray(data.notes) && data.notes.length) { data.deleted = data.deleted || {}; return data; }
     }
   } catch (e) { /* storage unavailable */ }
-  return { notes: [SAMPLE], current: SAMPLE.id };
+  return { notes: [SAMPLE], current: SAMPLE.id, deleted: {} };
 }
 let state = load();
 let saveTimer = null;
@@ -663,7 +738,7 @@ function openNote(id) {
 }
 function touch() {
   const n = current(); n.body = ed.value; n.title = titleEl.value; n.updated = Date.now();
-  updateStats(); scheduleSave(); renderList(); renderPreview();
+  updateStats(); scheduleSave(); renderList(); renderPreview(); markDirty();
 }
 function updateStats() {
   const chars = Array.from(ed.value.normalize('NFC')).length;
@@ -1276,6 +1351,198 @@ function setView(v) {
 }
 document.querySelectorAll('.view-switch button').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
 
+/* ---------- Backup: export, import, GitHub ---------- */
+const EXPORT_APP = 'fyzikalni-sesit';
+const exportData = () => ({ app: EXPORT_APP, version: 1, notes: state.notes, deleted: state.deleted });
+const today = () => new Date().toISOString().slice(0, 10);
+const safeName = t => (t || 'poznamka').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').slice(0, 60) || 'poznamka';
+
+async function offerFile(filename, text) {
+  // Inside claude.ai the page may not download by itself; the downloads capability asks the viewer
+  if (window.claude && typeof window.claude.use === 'function') {
+    const dl = await window.claude.use('downloads');
+    if (dl) {
+      try { await dl.save({ filename, data: text }); toast('Soubor uložen'); }
+      catch (e) { if (e && e.code !== 'declined') toast('Soubor se nepodařilo uložit'); }
+      return;
+    }
+  }
+  const url = URL.createObjectURL(new Blob([text], { type: filename.endsWith('.json') ? 'application/json' : 'text/plain' }));
+  const a = document.createElement('a'); a.href = url; a.download = filename;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+/* Merge notes from a backup or from GitHub: the newer version of each note wins, deletions travel along */
+function mergeNotes(notes, deleted) {
+  let added = 0, updated = 0;
+  Object.entries(deleted || {}).forEach(([id, at]) => {
+    if (!state.deleted[id] || state.deleted[id] < at) state.deleted[id] = at;
+  });
+  (notes || []).forEach(n => {
+    if (!n || typeof n.id !== 'string' || typeof n.body !== 'string') return;
+    if (state.deleted[n.id] && state.deleted[n.id] >= (n.updated || 0)) return;
+    const local = state.notes.find(l => l.id === n.id);
+    const clean = { id: n.id, title: String(n.title || ''), body: n.body, updated: +n.updated || Date.now() };
+    if (!local) { state.notes.push(clean); added++; }
+    else if (clean.updated > local.updated) { Object.assign(local, clean); updated++; }
+  });
+  state.notes = state.notes.filter(n => !(state.deleted[n.id] && state.deleted[n.id] >= n.updated));
+  if (!state.notes.length) state.notes.push({ id: 'n' + Date.now().toString(36), title: '', body: '', updated: Date.now() });
+  const cur = current();
+  if (state.current !== cur.id || ed.value !== cur.body || titleEl.value !== cur.title) {
+    const sel = [ed.selectionStart, ed.selectionEnd];
+    state.current = cur.id; ed.value = cur.body; titleEl.value = cur.title;
+    if (document.activeElement === ed) ed.setSelectionRange(Math.min(sel[0], ed.value.length), Math.min(sel[1], ed.value.length));
+  }
+  renderList(); updateStats(); renderPreview(); persist();
+  return { added, updated };
+}
+
+$('exportAll').addEventListener('click', () => offerFile(`fyzikalni-sesit-${today()}.json`, JSON.stringify(exportData(), null, 2)));
+$('exportOne').addEventListener('click', () => {
+  const n = current();
+  offerFile(safeName(noteName(n)) + '.txt', (n.title ? n.title + '\n\n' : '') + n.body);
+});
+$('importBtn').addEventListener('click', () => $('importFile').click());
+$('importFile').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  let text;
+  try { text = await file.text(); } catch (err) { toast('Soubor nejde přečíst'); return; }
+  let data = null;
+  try { data = JSON.parse(text); } catch (err) { /* plain text */ }
+  if (data && Array.isArray(data.notes)) {
+    const { added, updated } = mergeNotes(data.notes, data.deleted);
+    markDirty();
+    toast(`Importováno: ${added} nových, ${updated} aktualizovaných`);
+  } else if (data) {
+    toast('Tohle není záloha z Fyzikálního sešitu');
+  } else {
+    const n = { id: 'n' + Date.now().toString(36), title: file.name.replace(/\.[^.]+$/, ''), body: text.replace(/\r\n?/g, '\n'), updated: Date.now() };
+    state.notes.push(n); openNote(n.id); markDirty();
+    toast('Poznámka přidána');
+  }
+});
+
+/* GitHub: the notes live as one JSON file in the repository, written through the GitHub REST API */
+const GH_KEY = KEY + '-github';
+const PAGES_URL = 'https://vcernoch.github.io/Notepad-fyzika/';
+const GH_DEFAULT = { token: '', repo: 'vcernoch/Notepad-fyzika', path: 'poznamky/poznamky.json', branch: 'main' };
+let gh = { ...GH_DEFAULT };
+try { Object.assign(gh, JSON.parse(localStorage.getItem(GH_KEY) || '{}')); } catch (e) {}
+let ghDirty = false, ghBusy = false, ghTimer = null, ghAgain = false;
+const ghStatusEl = $('ghStatus'), ghStateEl = $('ghState');
+
+function ghShow(text, kind) {
+  ghStateEl.textContent = text;
+  ghStateEl.className = 'gh-state' + (kind ? ' ' + kind : '');
+  ghStatusEl.hidden = !gh.token;
+  ghStatusEl.textContent = 'GitHub: ' + (kind === 'err' ? 'chyba' : text.replace(/^Uloženo na GitHub/, 'uloženo'));
+}
+function markDirty() {
+  if (!gh.token || inClaude) return;
+  ghDirty = true;
+  clearTimeout(ghTimer);
+  ghTimer = setTimeout(ghSync, 60000);
+  ghStatusEl.hidden = false; ghStatusEl.textContent = 'GitHub: čeká na uložení';
+}
+const b64encode = str => {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+};
+const b64decode = b64 => new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\s/g, '')), c => c.charCodeAt(0)));
+
+async function ghRequest(method, body) {
+  const path = gh.path.split('/').map(encodeURIComponent).join('/');
+  const url = `https://api.github.com/repos/${gh.repo}/contents/${path}` + (method === 'GET' ? `?ref=${encodeURIComponent(gh.branch)}` : '');
+  return fetch(url, {
+    method, cache: 'no-store', keepalive: method !== 'GET' && body && body.content.length < 60000,
+    headers: { Authorization: 'Bearer ' + gh.token, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined
+  });
+}
+function ghError(status) {
+  if (status === 401) return 'Token nefunguje. Zkontroluj, že je celý a nevypršel.';
+  if (status === 403) return 'Token nemá právo zapisovat. U Contents nastav Read and write.';
+  if (status === 404) return 'Repozitář nebo větev nenalezena. Zkontroluj název repozitáře a že ho token smí používat.';
+  return 'GitHub odpověděl chybou ' + status + '.';
+}
+async function ghSync(retry = true) {
+  if (!gh.token) return;
+  if (ghBusy) { ghAgain = true; return; }
+  ghBusy = true; clearTimeout(ghTimer);
+  ghShow('Synchronizuji…');
+  try {
+    const res = await ghRequest('GET');
+    let sha, remoteKey = '';
+    if (res.status === 200) {
+      const file = await res.json();
+      sha = file.sha;
+      const remote = JSON.parse(b64decode(file.content || ''));
+      remoteKey = JSON.stringify([remote.notes, remote.deleted]);
+      mergeNotes(remote.notes, remote.deleted);
+    } else if (res.status !== 404) {
+      throw { status: res.status };
+    }
+    const data = exportData();
+    if (JSON.stringify([data.notes, data.deleted]) !== remoteKey) {
+      const put = await ghRequest('PUT', {
+        message: 'Poznámky z Fyzikálního sešitu ' + new Date().toLocaleString('cs-CZ'),
+        content: b64encode(JSON.stringify(data, null, 2)), branch: gh.branch, ...(sha ? { sha } : {})
+      });
+      if ((put.status === 409 || put.status === 422) && retry) { ghBusy = false; return ghSync(false); }
+      if (!put.ok) throw { status: put.status };
+    }
+    ghDirty = false;
+    ghShow('Uloženo na GitHub ' + new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' }), 'ok');
+  } catch (e) {
+    ghShow(e && e.status ? ghError(e.status)
+      : 'Nelze se spojit s GitHubem. V okně claude.ai to nejde, otevři sešit přes GitHub Pages. Jinak zkontroluj připojení k internetu.', 'err');
+  } finally {
+    ghBusy = false;
+    if (ghAgain) { ghAgain = false; ghSync(); }
+  }
+}
+
+const inClaude = !!(window.claude && typeof window.claude.use === 'function');
+function fillGhForm() {
+  $('ghInClaude').hidden = !inClaude;
+  ['ghConnect', 'ghToken', 'ghRepo', 'ghPath'].forEach(id => { $(id).disabled = inClaude; });
+  $('ghToken').value = gh.token; $('ghRepo').value = gh.repo; $('ghPath').value = gh.path;
+  $('ghSyncNow').disabled = $('ghForget').disabled = !gh.token || inClaude;
+  if (!gh.token) ghShow('Ukládání na GitHub není nastavené.');
+}
+$('ghConnect').addEventListener('click', () => {
+  gh.token = $('ghToken').value.trim();
+  gh.repo = $('ghRepo').value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\.git$|\/$/g, '') || GH_DEFAULT.repo;
+  gh.path = $('ghPath').value.trim().replace(/^\/+/, '') || GH_DEFAULT.path;
+  try { localStorage.setItem(GH_KEY, JSON.stringify(gh)); } catch (e) {}
+  fillGhForm();
+  if (gh.token) ghSync(); else toast('Vlož token');
+});
+$('ghSyncNow').addEventListener('click', () => ghSync());
+$('ghForget').addEventListener('click', () => {
+  gh = { ...GH_DEFAULT };
+  try { localStorage.removeItem(GH_KEY); } catch (e) {}
+  fillGhForm(); ghStatusEl.hidden = true; toast('GitHub odpojen, poznámky zůstaly tady');
+});
+document.addEventListener('visibilitychange', () => {
+  if (!gh.token) return;
+  if (document.visibilityState === 'hidden' && ghDirty) ghSync();
+  if (document.visibilityState === 'visible') ghSync();
+});
+
+function openSheet() { fillGhForm(); $('syncSheet').hidden = false; $('syncClose').focus(); }
+function closeSheet() { $('syncSheet').hidden = true; }
+$('syncOpen').addEventListener('click', openSheet);
+$('syncClose').addEventListener('click', closeSheet);
+$('syncSheet').addEventListener('click', e => { if (e.target === e.currentTarget) closeSheet(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('syncSheet').hidden) closeSheet(); });
+
 /* ---------- Top bar ---------- */
 function toast(msg) {
   toastEl.textContent = msg; toastEl.hidden = false;
@@ -1294,7 +1561,9 @@ $('copyNote').addEventListener('click', async () => {
 $('deleteNote').addEventListener('click', () => { $('deleteNote').hidden = true; $('confirmDelete').hidden = false; $('confirmDelete').focus(); });
 $('confirmDelete').addEventListener('blur', () => setTimeout(hideConfirm, 150));
 $('confirmDelete').addEventListener('click', () => {
+  state.deleted[state.current] = Date.now();
   state.notes = state.notes.filter(n => n.id !== state.current);
+  markDirty();
   if (!state.notes.length) state.notes.push({ id: 'n' + Date.now().toString(36), title: '', body: '', updated: Date.now() });
   const next = [...state.notes].sort((a, b) => b.updated - a.updated)[0];
   openNote(next.id); toast('Poznámka smazána');
@@ -1309,6 +1578,8 @@ try { savedView = localStorage.getItem(KEY + '-view') || 'both'; } catch (e) {}
 setView(['edit', 'both', 'paper'].includes(savedView) ? savedView : 'both');
 renderTabs();
 openNote(current().id);
+fillGhForm();
+if (gh.token && !inClaude) ghSync();
 })();
 </script>
 </body>
