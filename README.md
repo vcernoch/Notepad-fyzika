@@ -8,17 +8,16 @@ Běží na **https://vcernoch.github.io/Notepad-fyzika/** (po zapnutí GitHub Pa
 | Napíšeš | Dostaneš |
 |---|---|
 | `x^2`, `10^-11` | x², 10⁻¹¹ |
-| `v_0`, `F_max` | v₀, Fₘₐₓ |
+| `v_0`, `F_max` | dolní index (v náhledu Papír zmenšený dole) |
 | Alt+V | šipka nad písmenem před kurzorem, F⃗ |
 | `a*b` | a·b |
 | `->`, `<=`, `>=`, `!=`, `~=`, `+-` | →, ≤, ≥, ≠, ≈, ± |
 | `alfa`, `síla`, `newton` + Tab | α, F / F⃗, N (našeptávač) |
-| `Wel`, `Fmax`, `v0` + Tab | Wₑₗ, Fₘₐₓ, v₀ |
+| `Wel`, `Fmax`, `v0` + Tab | W_el, F_max, v_0 |
 | `absolutní hodnota` / `abs` + Tab | \|…\| s kurzorem uprostřed, Tab skočí za čáru |
 | `s/` + Tab, `3/` + výběr | (s)/(…), (…)/(…), ³⁄₄, ¾ |
 | `s-1`, `m·s-2`, `m3` + Tab | s⁻¹, m·s⁻², m³ |
 | `x` + Tab | × (šipkou ↓ i ·) |
-| `Fd`, `ad` + Tab | F_d, a_d (v náhledu Papír jako dolní index) |
 | Alt+↑ / Alt+↓ | režim horního / dolního indexu |
 | Alt+B | tučný vektor 𝐅 |
 

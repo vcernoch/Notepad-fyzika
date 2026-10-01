@@ -290,7 +290,7 @@ button { cursor: pointer; }
 
   <main class="editor-wrap" id="editorWrap" data-view="both">
     <textarea class="editor" id="editor" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" data-gramm="false" aria-label="Text poznámky"
-      placeholder="Piš vzorce… např. F = m·a,  v_0 → v₀,  x^2 → x²,  alfa + Tab → α"></textarea>
+      placeholder="Piš vzorce… např. F = m·a,  v_0,  x^2 → x²,  alfa + Tab → α"></textarea>
     <ul class="suggest" id="suggest" role="listbox" aria-label="Návrhy značek" hidden></ul>
     <div class="preview" id="preview" aria-label="Náhled jako na papíře"></div>
     <div class="status">
@@ -467,7 +467,14 @@ GREEK_NAMES.forEach(([name, lo, up, alt = []]) => {
   DICT.push({ name, sym: lo, kind: 'písmeno', note: 'malé', keys, upper: false });
   DICT.push({ name: name[0].toUpperCase() + name.slice(1), sym: up, kind: 'písmeno', note: 'velké', keys, upper: true });
 });
-QUANTITIES.forEach(([name, sym, unit, vec]) => {
+/* Lower indices are always written with an underscore (F_g, E_k, v_0) so the text looks the same
+   whether Unicode has a small letter for it or not; the paper view draws them as real indices */
+const SUB_BACK = Object.fromEntries(Object.entries(SUB).map(([k, v]) => [v, k]));
+const SUB_RUN = new RegExp('[' + Object.values(SUB).join('') + ']+', 'gu');
+const plainSub = text => text.replace(SUB_RUN, run => '_' + Array.from(run).map(c => SUB_BACK[c]).join(''));
+
+QUANTITIES.forEach(([name, rawSym, unit, vec]) => {
+  const sym = plainSub(rawSym);
   const note = unit ? '[' + unit + ']' : '';
   DICT.push({ name, sym, kind: 'veličina', note, keys: [fold(name)] });
   // the arrow goes over the letter, not over its index: F⃗ₜ, F⃗_d
@@ -495,13 +502,12 @@ function indexSuggestion(word) {
   const head = chars[0], rest = chars.slice(1);
   if (rest.length < 1 || rest.length > 3 || !rest.every(c => /[\p{L}\d]/u.test(c)) || NOT_INDEX.has(word)) return null;
   // letters without a Unicode subscript (d, g, b…) are written as F_d and drawn as an index in the paper view
-  const plain = rest.every(c => SUB[c]);
   const hasDigit = rest.some(c => /\d/.test(c));
   const upper = head !== head.toLowerCase();
   // lowercase words need a digit or a typical index, so ordinary words (pro, jak) stay quiet
   if (!upper && !hasDigit && !COMMON_INDEX.has(rest.join(''))) return null;
-  return { name: head + ' s indexem ' + rest.join(''), sym: plain ? head + rest.map(c => SUB[c]).join('') : head + '_' + rest.join(''),
-    kind: 'index', note: plain ? '' : 'index se ukáže v náhledu', strong: upper || hasDigit };
+  return { name: head + ' s indexem ' + rest.join(''), sym: head + '_' + rest.join(''),
+    kind: 'index', note: 'v náhledu jako index', strong: upper || hasDigit };
 }
 
 /* "r2" → r², "t10" → t¹⁰: letter followed only by digits can also be a power */
@@ -821,9 +827,9 @@ ed.addEventListener('beforeinput', e => {
   const before = ed.value.slice(0, s);
   const prev = before.slice(-1);
 
-  // x^2 → x², v_0 → v₀ (continues while characters are convertible)
-  if ((prev === '^' && SUP[ch]) || (prev === '_' && SUB[ch])) {
-    const sup = prev === '^';
+  // x^2 → x² (continues while characters are convertible); v_0 stays as typed and shows as an index on paper
+  if (prev === '^' && SUP[ch]) {
+    const sup = true;
     e.preventDefault();
     replaceRange(s - 1, s, (sup ? SUP : SUB)[ch]);
     setMode(sup ? 'sup' : 'sub', true);
@@ -1133,7 +1139,7 @@ function formulaList(items) {
     b.addEventListener('click', () => {
       const s = ed.selectionStart;
       const atLineStart = s === 0 || ed.value[s - 1] === '\n';
-      insert((atLineStart ? '' : '\n') + f + '\n');
+      insert((atLineStart ? '' : '\n') + plainSub(f) + '\n');
     });
     wrap.append(b);
   });
@@ -1152,7 +1158,7 @@ const TABS = {
   ],
   'Indexy': () => {
     const hint = document.createElement('p'); hint.className = 'hint';
-    hint.textContent = 'Zapnutý režim převádí psané znaky. Označený text převede tlačítko hned. Rychleji: x^2 → x², v_0 → v₀.';
+    hint.textContent = 'Zapnutý režim převádí psané znaky. Označený text převede tlačítko hned. Rychleji: x^2 → x². Dolní index piš s podtržítkem (v_0), v náhledu Papír se ukáže jako index.';
     return [
       hint,
       label('Režim psaní'),
@@ -1190,7 +1196,7 @@ const TABS = {
   'Vzorce': () => Object.entries(FORMULAS).flatMap(([name, list]) => [label(name), formulaList(list)]),
   'Zkratky': () => {
     const rows = [
-      ['x^2', 'x²'], ['10^-11', '10⁻¹¹'], ['v_0', 'v₀'], ['F_max', 'Fₘₐₓ'], ['a*b', 'a·b'], ['s-1 + Tab', 's⁻¹'], ['x + Tab', '×'], ['Fd + Tab', 'F_d (v náhledu Fd s indexem)'], ['m3 + Tab', 'm³'], ['->', '→'], ['=>', '⇒'],
+      ['x^2', 'x²'], ['10^-11', '10⁻¹¹'], ['v_0, F_max', 'dolní index (v náhledu)'], ['a*b', 'a·b'], ['s-1 + Tab', 's⁻¹'], ['x + Tab', '×'], ['Fd + Tab', 'F_d (v náhledu Fd s indexem)'], ['m3 + Tab', 'm³'], ['->', '→'], ['=>', '⇒'],
       ['<=  >=', '≤  ≥'], ['!=', '≠'], ['~=', '≈'], ['+-', '±'],
       ['alfa + Tab', 'α'], ['Delta + Tab', 'Δ'], ['síla + Tab', 'F nebo F⃗'], ['newton + Tab', 'N'], ['Wel + Tab', 'Wₑₗ'], ['absolutní hodnota + Tab', '|…|'], ['m·v/ + Tab', 'm·v/(…)'], ['1/ + výběr', '½ ⅓ ¼'], ['Fmax + Tab', 'Fₘₐₓ'],
       ['Alt + ↑ / ↓', 'horní / dolní index'], ['Alt + V', 'šipka nad písmenem'], ['Alt + B', 'tučně'], ['Esc', 'zruší režim']
