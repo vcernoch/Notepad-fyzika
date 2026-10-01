@@ -1227,89 +1227,129 @@ const previewEl = $('preview'), wrapEl = $('editorWrap');
 const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const STOP = new Set([...'=+-−<>≤≥≈≠±∓→⇒←⇔;:[]{}']);
 
-// Split a line into terms (products like m·v², sin(x), 2π·√(l/g)), slashes and separators
-function tokenize(str) {
+// Every rendered piece carries data-s = its position in the line, so a tap on the paper can find the character
+const MUL = new Set([...'·×⋅']);
+
+// Split a line into terms (products like m·v², sin(x), 2π·√(l/g)), slashes and separators.
+// base = position of str[0] in the line. A product binds across spaces: "Y × 3" is one term.
+function tokenize(str, base) {
   const out = [];
   let i = 0;
+  const lastIsTerm = () => out.length && out[out.length - 1].type === 'term';
   const pushPart = part => {
-    const last = out[out.length - 1];
-    if (last && last.type === 'term') last.parts.push(part); else out.push({ type: 'term', parts: [part] });
+    if (lastIsTerm()) out[out.length - 1].parts.push(part); else out.push({ type: 'term', parts: [part] });
   };
+  const breaksAtom = d => /\s/.test(d) || d === '/' || d === '(' || d === ')' || STOP.has(d) || MUL.has(d);
   while (i < str.length) {
     const c = str[i];
     if (/\s/.test(c)) {
       let j = i; while (j < str.length && /\s/.test(str[j])) j++;
-      out.push({ type: 'sep', text: str.slice(i, j) }); i = j;
+      if (lastIsTerm() && j < str.length && (MUL.has(str[i - 1]) || MUL.has(str[j]))) { i = j; continue; }
+      out.push({ type: 'sep', text: str.slice(i, j), s: base + i }); i = j;
     } else if (c === '/') {
-      out.push({ type: 'slash' }); i++;
+      out.push({ type: 'slash', s: base + i }); i++;
     } else if (c === '(') {
       let depth = 0, j = i;
       for (; j < str.length; j++) { if (str[j] === '(') depth++; else if (str[j] === ')' && --depth === 0) break; }
-      if (j >= str.length) { out.push({ type: 'sep', text: c }); i++; continue; }
-      pushPart({ group: str.slice(i + 1, j) }); i = j + 1;
+      if (j >= str.length) { out.push({ type: 'sep', text: c, s: base + i }); i++; continue; }
+      pushPart({ group: str.slice(i + 1, j), s: base + i + 1 }); i = j + 1;
+    } else if (MUL.has(c)) {
+      pushPart({ op: c, s: base + i }); i++;
     } else if (STOP.has(c) || c === ')' || (c === ',' && !(/\d/.test(str[i - 1] || '') && /\d/.test(str[i + 1] || '')))) {
-      out.push({ type: 'sep', text: c }); i++;
+      out.push({ type: 'sep', text: c, s: base + i }); i++;
     } else {
       let j = i + 1;
-      while (j < str.length) {
-        const d = str[j];
-        if (/\s/.test(d) || d === '/' || d === '(' || d === ')' || STOP.has(d)) break;
-        if (d === ',' && !(/\d/.test(str[j - 1]) && /\d/.test(str[j + 1] || ''))) break;
+      while (j < str.length && !breaksAtom(str[j])) {
+        if (str[j] === ',' && !(/\d/.test(str[j - 1]) && /\d/.test(str[j + 1] || ''))) break;
         j++;
       }
-      pushPart({ atom: str.slice(i, j) }); i = j;
+      pushPart({ atom: str.slice(i, j), s: base + i }); i = j;
     }
   }
   return out;
 }
-function renderTerm(term, bare) {
-  // bare: a lone (group) as numerator/denominator loses its parentheses
-  if (bare && term.parts.length === 1 && term.parts[0].group !== undefined) return renderSeq(term.parts[0].group);
-  let html = '';
-  term.parts.forEach((p, k) => {
-    if (p.atom !== undefined) {
-      const next = term.parts[k + 1];
-      const m = next && next.group !== undefined && p.atom.match(/[√∛∜]$/);
-      html += esc(m ? p.atom.slice(0, -1) : p.atom)
-        .replace(/_([\p{L}\d\u0300-\u036f\u20d0-\u20ff]+)/gu, '<sub>$1</sub>')
-        .replace(/\^([-−]?[\p{L}\d]+)/gu, '<sup>$1</sup>')
-        .replace(/[·×⋅]/g, '<span class="op">$&</span>');
-      if (m) {
-        const index = { '∛': '3', '∜': '4' }[m[0]];
-        html += '<span class="rad">' + (index ? '<span class="rad-index">' + index + '</span>' : '') +
-          '<span class="rad-sign" aria-hidden="true"><svg viewBox="0 0 10 20" preserveAspectRatio="none"><path vector-effect="non-scaling-stroke" d="M0 12 L2.5 10.5 L5.5 19.5 L10 0.4"/></svg></span>' +
-          '<span class="rad-body">' + renderSeq(next.group) + '</span></span>';
-        next.done = true;
-      }
-    } else if (!p.done) {
-      html += '(' + renderSeq(p.group) + ')';
+
+const piece = (s, text, cls) => '<span data-s="' + s + '"' + (cls ? ' class="' + cls + '"' : '') + '>' + esc(text) + '</span>';
+// an atom with _index and ^power written out
+function renderAtom(text, s) {
+  let html = '', k = 0, run = '', runAt = 0;
+  const flush = () => { if (run) html += piece(s + runAt, run); run = ''; };
+  while (k < text.length) {
+    const rest = text.slice(k);
+    const sub = rest.match(/^_([\p{L}\d̀-ͯ⃐-⃿]+)/u);
+    const sup = rest.match(/^\^([-−]?[\p{L}\d]+)/u);
+    if (sub || sup) {
+      flush();
+      const m = sub || sup, tag = sub ? 'sub' : 'sup';
+      html += '<' + tag + ' data-s="' + (s + k + 1) + '">' + esc(m[1]) + '</' + tag + '>';
+      k += m[0].length;
+    } else {
+      if (!run) runAt = k;
+      run += text[k]; k++;
     }
-    delete p.done;
-  });
+  }
+  flush();
   return html;
 }
-function renderSeq(str) {
-  if (!str.trim()) return '<span class="ph"></span>';
-  // multiplication binds tighter than a space: "Y × 3" stays one term, e.g. in a denominator
-  const toks = tokenize(str.replace(/\s*([·×⋅])\s*/g, '$1'));
-  const out = []; // rendered items: {html, term?}
+function renderParts(parts) {
+  let html = '';
+  for (let k = 0; k < parts.length; k++) {
+    const p = parts[k], next = parts[k + 1];
+    if (p.op) { html += piece(p.s, p.op, 'op'); continue; }
+    if (p.group !== undefined) {
+      html += piece(p.s - 1, '(') + renderSeq(p.group, p.s) + piece(p.s + p.group.length, ')');
+      continue;
+    }
+    const rad = next && next.group !== undefined && p.atom.match(/[√∛∜]$/);
+    html += renderAtom(rad ? p.atom.slice(0, -1) : p.atom, p.s);
+    if (rad) {
+      const index = { '∛': '3', '∜': '4' }[rad[0]];
+      html += '<span class="rad" data-s="' + (p.s + p.atom.length - 1) + '">' + (index ? '<span class="rad-index">' + index + '</span>' : '') +
+        '<span class="rad-sign" aria-hidden="true"><svg viewBox="0 0 10 20" preserveAspectRatio="none"><path vector-effect="non-scaling-stroke" d="M0 12 L2.5 10.5 L5.5 19.5 L10 0.4"/></svg></span>' +
+        '<span class="rad-body">' + renderSeq(next.group, next.s) + '</span></span>';
+      k++;
+    }
+  }
+  return html;
+}
+// numerator/denominator: a lone (group) loses its parentheses
+const renderOperand = parts => parts.length === 1 && parts[0].group !== undefined ? renderSeq(parts[0].group, parts[0].s) : renderParts(parts);
+const isRadGroup = (parts, k) => k > 0 && parts[k - 1].atom && /[√∛∜]$/.test(parts[k - 1].atom);
+
+function renderSeq(str, base) {
+  if (!str.trim()) return '<span class="ph" data-s="' + base + '" data-ph="1"></span>';
+  const toks = tokenize(str, base);
+  const out = []; // rendered items: {html, parts?, frac?, space?}
   for (let i = 0; i < toks.length; i++) {
     const t = toks[i];
     if (t.type === 'slash') {
       let a = out.length - 1; while (a >= 0 && out[a].space) a--;
       let b = i + 1; while (b < toks.length && toks[b].type === 'sep' && !toks[b].text.trim()) b++;
       const left = out[a], right = toks[b];
-      if (left && (left.term || left.frac) && right && right.type === 'term') {
+      if (left && (left.parts || left.frac) && right && right.type === 'term') {
         out.length = a;
-        const num = left.frac ? left.html : renderTerm(left.term, true);
-        out.push({ frac: true, html: '<span class="frac"><span class="num">' + num + '</span><span class="den">' + renderTerm(right, true) + '</span></span>' });
+        let num;
+        if (left.frac) num = left.html;
+        else {
+          // "2·(a+b)/c": brackets right before the slash mark the numerator exactly
+          const lp = left.parts, last = lp.length - 1;
+          if (lp.length > 1 && lp[last].group !== undefined && !isRadGroup(lp, last)) {
+            out.push({ html: renderParts(lp.slice(0, last)) });
+            num = renderSeq(lp[last].group, lp[last].s);
+          } else num = renderOperand(lp);
+        }
+        // "F/(m) × 3": brackets right after the slash mark the denominator exactly
+        const rp = right.parts;
+        const denParts = rp[0].group !== undefined ? [rp[0]] : rp;
+        out.push({ frac: true, html: '<span class="frac"><span class="num">' + num + '</span><span class="den">' + renderOperand(denParts) + '</span></span>' });
+        if (denParts.length < rp.length) out.push({ parts: rp.slice(1), html: renderParts(rp.slice(1)) });
         i = b; continue;
       }
-      out.push({ html: '/' });
+      out.push({ html: piece(t.s, '/') });
     } else if (t.type === 'term') {
-      out.push({ term: t, html: renderTerm(t, false) });
+      out.push({ parts: t.parts, html: renderParts(t.parts) });
     } else {
-      out.push({ html: esc(t.text), space: !t.text.trim() });
+      out.push({ html: piece(t.s, t.text), space: !t.text.trim() });
     }
   }
   return out.map(o => o.html).join('');
@@ -1323,7 +1363,7 @@ function renderPreview() {
     previewQueued = false;
     const lines = ed.value.split('\n');
     const label = wrapEl.dataset.view === 'both' ? '<div class="pv-label">Jak to vypadá na papíře</div>' : '';
-    previewEl.innerHTML = label + lines.map((l, i) => '<div class="pv-line" data-line="' + i + '">' + (l.trim() ? renderSeq(l) : '') + '</div>').join('');
+    previewEl.innerHTML = label + lines.map((l, i) => '<div class="pv-line" data-line="' + i + '">' + (l.trim() ? renderSeq(l, 0) : '') + '</div>').join('');
     markCurrentLine();
   });
 }
@@ -1341,14 +1381,39 @@ function markCurrentLine() {
 }
 document.addEventListener('selectionchange', () => { if (document.activeElement === ed) markCurrentLine(); });
 
+// A tap on the paper puts the cursor on that very character in the text
+function charAtPoint(e, line) {
+  let node = null, offset = 0;
+  if (document.caretPositionFromPoint) {
+    const p = document.caretPositionFromPoint(e.clientX, e.clientY);
+    if (p) { node = p.offsetNode; offset = p.offset; }
+  } else if (document.caretRangeFromPoint) {
+    const r = document.caretRangeFromPoint(e.clientX, e.clientY);
+    if (r) { node = r.startContainer; offset = r.startOffset; }
+  }
+  const direct = e.target.closest && e.target.closest('[data-s]');
+  if (direct && direct.dataset.ph) return +direct.dataset.s;
+  if (node && node.nodeType === 3 && line.contains(node)) {
+    const el = node.parentElement.closest('[data-s]');
+    if (el && !el.classList.contains('rad')) return +el.dataset.s + offset;
+  }
+  if (direct) return +direct.dataset.s;
+  return null;
+}
 previewEl.addEventListener('click', e => {
   const line = e.target.closest('.pv-line');
   if (!line) return;
   const n = +line.dataset.line;
-  const pos = ed.value.split('\n').slice(0, n).reduce((sum, l) => sum + l.length + 1, 0);
-  const end = pos + (ed.value.split('\n')[n] || '').length;
+  const lines = ed.value.split('\n');
+  const lineStart = lines.slice(0, n).reduce((sum, l) => sum + l.length + 1, 0);
+  const len = (lines[n] || '').length;
+  const at = charAtPoint(e, line);
+  const pos = lineStart + Math.max(0, Math.min(at === null ? len : at, len));
   if (wrapEl.dataset.view === 'paper') setView('both');
-  ed.focus(); ed.setSelectionRange(end, end);
+  ed.focus();
+  ed.setSelectionRange(pos, pos);
+  const c = caretXY(pos);
+  if (c.y < ed.scrollTop || c.y + c.h > ed.scrollTop + ed.clientHeight) ed.scrollTop = Math.max(0, c.y - ed.clientHeight / 3);
 });
 
 function setView(v) {
