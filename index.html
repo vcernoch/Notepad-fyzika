@@ -1339,8 +1339,12 @@ function renderSeq(str, base) {
         let num;
         if (left.frac) num = left.html;
         else {
+          // "… · Q/r²": a multiplication sign at the start stays between the fractions
+          let lp = left.parts;
+          let lead = 0; while (lead < lp.length - 1 && lp[lead].op) lead++;
+          if (lead) { out.push({ html: renderParts(lp.slice(0, lead)) }); lp = lp.slice(lead); }
           // "2·(a+b)/c": brackets right before the slash mark the numerator exactly
-          const lp = left.parts, last = lp.length - 1;
+          const last = lp.length - 1;
           if (lp.length > 1 && lp[last].group !== undefined && !isRadGroup(lp, last)) {
             out.push({ html: renderParts(lp.slice(0, last)) });
             num = renderSeq(lp[last].group, lp[last].s);
