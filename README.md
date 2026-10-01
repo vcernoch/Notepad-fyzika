@@ -15,7 +15,7 @@ Běží na **https://vcernoch.github.io/Notepad-fyzika/** (po zapnutí GitHub Pa
 | `alfa`, `síla`, `newton` + Tab | α, F / F⃗, N (našeptávač) |
 | `Wel`, `Fmax`, `v0` + Tab | Wₑₗ, Fₘₐₓ, v₀ |
 | `absolutní hodnota` / `abs` + Tab | \|…\| s kurzorem uprostřed, Tab skočí za čáru |
-| `s/` + Tab, `3/` + výběr | s/(…), (…)/(…), ³⁄₄, ¾ |
+| `s/` + Tab, `3/` + výběr | (s)/(…), (…)/(…), ³⁄₄, ¾ |
 | `s-1`, `m·s-2`, `m3` + Tab | s⁻¹, m·s⁻², m³ |
 | `x` + Tab | × (šipkou ↓ i ·) |
 | `Fd`, `ad` + Tab | F_d, a_d (v náhledu Papír jako dolní index) |

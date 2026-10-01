@@ -904,9 +904,11 @@ function fractionItems(s) {
   if (!num) {
     items.push({ name: 'Zlomek', sym: '(…)/(…)', kind: 'zlomek', note: 'Tab přeskočí do jmenovatele', action: put(slash, '()/()', 1) });
   } else {
-    items.push({ name: 'Jmenovatel v závorce', sym: num + '/(…)', kind: 'zlomek', note: '', action: put(slash, '/()', 2) });
-    if (Array.from(num).length > 1 && !num.startsWith('(')) {
-      items.push({ name: 'Celý zlomek v závorkách', sym: '(' + num + ')/(…)', kind: 'zlomek', note: '', action: put(ns, '(' + num + ')/()', num.length + 4) });
+    // brackets on both sides by default, so it is always clear what belongs to the fraction
+    const wrapped = before.endsWith(')') && num.startsWith('(') ? num : '(' + num + ')';
+    items.push({ name: 'Zlomek', sym: wrapped + '/(…)', kind: 'zlomek', note: 'Tab vyskočí ze jmenovatele', action: put(ns, wrapped + '/()', wrapped.length + 2) });
+    if (wrapped !== num) {
+      items.push({ name: 'Bez závorky v čitateli', sym: num + '/(…)', kind: 'zlomek', note: '', action: put(slash, '/()', 2) });
     }
     const chars = Array.from(num);
     if (chars.length <= 3 && chars.every(c => SUP[c])) {
