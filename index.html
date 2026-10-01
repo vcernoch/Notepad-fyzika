@@ -1002,11 +1002,9 @@ function jumpOut() {
   return false;
 }
 
-function acceptSuggest(thenJump) {
+function acceptSuggest() {
   const d = sug.items[sug.index];
   if (!d) return;
-  // a plain symbol finishes the word, so Tab also moves on (r2 + Tab in a denominator → r² and out)
-  if (thenJump && !d.action && !d.wrap) { acceptSuggest(false); jumpOut(); return; }
   const { start, end } = sug;
   hideSuggest();
   if (d.action) {
@@ -1028,7 +1026,7 @@ ed.addEventListener('keydown', e => {
     sug.index = (sug.index + (e.key === 'ArrowDown' ? 1 : n - 1)) % n; sug.moved = true;
     renderSuggest();
   } else if (e.key === 'Tab' || (e.key === 'Enter' && sug.moved)) {
-    e.preventDefault(); e.stopImmediatePropagation(); acceptSuggest(e.key === 'Tab');
+    e.preventDefault(); e.stopImmediatePropagation(); acceptSuggest();
   } else if (e.key === 'Escape') {
     e.stopImmediatePropagation(); hideSuggest();
   } else if (/^(ArrowLeft|ArrowRight|Home|End|Page|Enter)/.test(e.key)) {
